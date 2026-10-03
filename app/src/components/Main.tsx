@@ -1,0 +1,459 @@
+import { badgeCount, defaultList, isExclusive, items, primaryGroups, sortedLists, storeView, type Item, type Mode } from "@shared/view.ts";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { ArrowRight, Cart, CheckCircle, ChevronDown, ChevronRight, CloudOff, CloudOk, CloudSync, Download, Eye, EyeOff, More, Plus, Refresh, Route, Settings as SettingsIcon, SortIcon, UserPlus } from "../icons.tsx";
+import { finishTrip, reorderProducts } from "../lib/actions.ts";
+import { ago, plural } from "../lib/format.ts";
+import { setPrefs, usePrefs } from "../lib/prefs.ts";
+import { usePwaUpdate } from "../lib/pwa.ts";
+import { store, useStore } from "../lib/store.ts";
+import { PULL_THRESHOLD, usePullToRefresh } from "../lib/usePullToRefresh.ts";
+import { useWakeLock } from "../lib/useWakeLock.ts";
+import { ItemRow } from "./ItemRow.tsx";
+import { Settings, type SettingsPage } from "./Settings.tsx";
+import { AddSheet, EditSheet, InviteSheet } from "./Sheets.tsx";
+import { SortableList } from "./Sortable.tsx";
+
+type Sheet = { kind: "add" } | { kind: "edit"; id: string } | { kind: "invite" } | null;
+export interface Toast {
+  text: string;
+  undo?: () => void;
+}
+
+export function Main() {
+  const st = useStore();
+  const prefs = usePrefs();
+  const s = st.snapshot;
+  const [menu, setMenu] = useState<"list" | "more" | null>(null);
+  const [sheet, setSheet] = useState<Sheet>(null);
+  const [settings, setSettings] = useState<SettingsPage | null>(null);
+  const [sorting, setSorting] = useState(false);
+  const [toast, setToast] = useState<Toast | null>(null);
+  const toastTimer = useRef<number | undefined>(undefined);
+  const contentRef = useRef<HTMLElement>(null);
+  const { needRefresh, install } = usePwaUpdate();
+  const all = useMemo(() => items(s), [s]);
+
+  useWakeLock(prefs.shopping);
+  useEffect(() => store.setFast(prefs.shopping), [prefs.shopping]);
+
+  const showToast = (t: Toast) => {
+    window.clearTimeout(toastTimer.current);
+    setToast(t);
+    toastTimer.current = window.setTimeout(() => setToast(null), 4500);
+  };
+  const onSyncNow = async () => {
+    setMenu(null);
+    const ok = await store.syncNow();
+    showToast({
+      text: ok ? "Synchronisiert" : store.status === "offline" ? "Offline – Änderungen bleiben gespeichert" : store.lastError || "Sync fehlgeschlagen",
+    });
+  };
+  // Erst aktiv, wenn die Liste da ist (vorher gibt es kein Scroll-Element) und nicht beim Sortieren.
+  const ptr = usePullToRefresh(contentRef, onSyncNow, !sorting && s.lists.size > 0);
+
+  const lists = sortedLists(s);
+  const list = s.lists.get(prefs.listId) ?? defaultList(s);
+  if (!list) {
+    return (
+      <div className="splash">
+        {st.status === "offline" ? "Offline – noch keine Daten auf diesem Gerät." : "Daten werden geladen…"}
+      </div>
+    );
+  }
+
+  const tab = prefs.tab === "alle" || list.storeIds.includes(prefs.tab) ? prefs.tab : (list.storeIds[0] ?? "alle");
+  const storeId = tab === "alle" ? null : tab;
+  const store_ = storeId ? s.stores.get(storeId) : undefined;
+  const mode: Mode = (storeId && prefs.modes[storeId]) || "alles";
+  const isSorting = sorting && !!storeId;
+  const view = storeId ? storeView(s, all, { listId: list.id, storeId, mode, hideDone: prefs.hideDone }) : null;
+  const plan = storeId ? null : primaryGroups(s, all, list.id, prefs.hideDone);
+
+  const me = st.session?.memberId;
+  const myName = st.session?.memberName;
+  /** „von Anna“ nur bei anderen Personen – eigene weitere Geräte (gleicher Name) zählen als „ich“. */
+  const byName = (it: Item) => {
+    if (!it.entry.checked || !it.entry.checkedBy || it.entry.checkedBy === me) return undefined;
+    const name = s.members.get(it.entry.checkedBy)?.name;
+    return name && name !== myName ? name : undefined;
+  };
+  const dotFor = (it: Item) => (storeId && mode === "alles" && !it.entry.checked && isExclusive(it, storeId) ? store_?.color : undefined);
+  const row = (it: Item) => (
+    <ItemRow key={it.entry.id} item={it} dotColor={dotFor(it)} checkedBy={byName(it)} onEdit={(id) => setSheet({ kind: "edit", id })} />
+  );
+
+  const doneInList = all.filter((it) => it.list.id === list.id && it.entry.checked).length;
+  const doneAll = all.filter((it) => it.entry.checked).length;
+  const idx = storeId ? list.storeIds.indexOf(storeId) : -1;
+  const higher = idx > 0 ? list.storeIds.slice(0, idx).map((id) => s.stores.get(id)?.name ?? id).join(" oder ") : "";
+  const isOpen = (key: string) => prefs.open[key] === true;
+  const toggleOpen = (key: string) => setPrefs((p) => ({ open: { ...p.open, [key]: !p.open[key] } }));
+
+  const closeMenuAnd = (fn: () => void) => () => {
+    setMenu(null);
+    fn();
+  };
+  const onFinish = () => {
+    const { count, undo } = finishTrip();
+    showToast({ text: `${plural(count, "Eintrag", "Einträge")} abgeräumt`, undo });
+  };
+
+  return (
+    <div className={prefs.shopping ? "app shopping" : "app"} style={{ "--toast-bottom": isSorting ? "24px" : doneAll ? "128px" : "78px" } as CSSProperties}>
+      <header className="top">
+        <div className="top-row">
+          <button className="list-btn" onClick={() => setMenu(menu === "list" ? null : "list")} aria-haspopup="menu" aria-expanded={menu === "list"}>
+            <span>{list.name}</span>
+            <ChevronDown />
+          </button>
+          <div className="top-actions">
+            <SyncChip onClick={onSyncNow} />
+            <button className="icon-btn" onClick={() => setMenu(menu === "more" ? null : "more")} aria-label="Weitere Optionen" aria-expanded={menu === "more"}>
+              <More size={22} />
+              {needRefresh && <span className="dot-badge" />}
+            </button>
+          </div>
+        </div>
+        <nav className="tabs" aria-label="Geschäfte">
+          {list.storeIds.map((id) => {
+            const st_ = s.stores.get(id);
+            if (!st_) return null;
+            const n = badgeCount(all, id);
+            return (
+              <button key={id} className="tab" aria-pressed={tab === id} style={{ "--c": st_.color } as CSSProperties} onClick={() => setPrefs({ tab: id })}>
+                {st_.name}
+                {n > 0 && <span className="badge">{n}</span>}
+              </button>
+            );
+          })}
+          <button
+            className="tab"
+            aria-pressed={tab === "alle"}
+            onClick={() => {
+              setSorting(false);
+              setPrefs({ tab: "alle" });
+            }}
+          >
+            Alle
+          </button>
+        </nav>
+      </header>
+
+      {st.sessionLost && (
+        <div className="banner" role="alert">
+          Dieses Gerät ist nicht mehr angemeldet.
+          <button onClick={() => confirm("Gerät neu einrichten? Nicht synchronisierte Änderungen gehen verloren.") && void store.logout()}>Neu einrichten</button>
+        </div>
+      )}
+
+      <div className="modebar">
+        {isSorting ? (
+          <div className="mode-bar">
+            <SortIcon size={18} />
+            <span>Am Griff ziehen – Reihenfolge bei {store_?.name}</span>
+            <button onClick={() => setSorting(false)}>Fertig</button>
+          </div>
+        ) : (
+          <>
+            {prefs.shopping && (
+              <div className="mode-bar">
+                <Cart size={18} />
+                <span>Einkaufsmodus – Display bleibt an</span>
+                <button onClick={() => setPrefs({ shopping: false })}>Beenden</button>
+              </div>
+            )}
+            <div className="modebar-row">
+              {storeId ? (
+                <div className="seg" role="group" aria-label="Ansicht">
+                  <button aria-pressed={mode === "alles"} onClick={() => setPrefs((p) => ({ modes: { ...p.modes, [storeId]: "alles" } }))}>
+                    Alles hier
+                  </button>
+                  <button aria-pressed={mode === "nur"} onClick={() => setPrefs((p) => ({ modes: { ...p.modes, [storeId]: "nur" } }))}>
+                    Nur für hier
+                  </button>
+                </div>
+              ) : (
+                <span className="plan-hint">Nach Geschäft geplant</span>
+              )}
+              <button
+                className="hide-btn"
+                aria-pressed={prefs.hideDone}
+                aria-label={prefs.hideDone ? "Erledigte sind ausgeblendet – tippen zum Anzeigen" : "Erledigte ausblenden"}
+                onClick={() => setPrefs((p) => ({ hideDone: !p.hideDone }))}
+              >
+                {prefs.hideDone ? <EyeOff size={18} /> : <Eye size={18} />}
+                Erledigte
+                {doneInList > 0 && <span className="count">{doneInList}</span>}
+              </button>
+            </div>
+            {storeId && mode === "alles" && idx > 0 && (
+              <span className="legend">
+                <span className="dot" style={{ "--c": store_?.color } as CSSProperties} />
+                Punkt = gibt’s nicht bei {higher}
+              </span>
+            )}
+          </>
+        )}
+      </div>
+
+      <main className="content" ref={contentRef}>
+        {(ptr.pull > 0 || ptr.refreshing) && (
+          <div className={ptr.dragging ? "ptr dragging" : "ptr"} style={{ height: ptr.pull }} aria-live="polite">
+            <span className={ptr.refreshing ? "ptr-icon spin" : "ptr-icon"} style={ptr.refreshing ? undefined : { transform: `rotate(${ptr.pull * 4}deg)` }}>
+              <Refresh size={18} />
+            </span>
+            {ptr.refreshing ? "Synchronisiere…" : ptr.pull >= PULL_THRESHOLD ? "Loslassen zum Synchronisieren" : "Zum Synchronisieren ziehen"}
+          </div>
+        )}
+        {view && isSorting && storeId && (
+          <>
+            {view.groups.map((g) => (
+              <section key={g.category.id}>
+                <h2 className="cat"><span>{g.category.name}</span></h2>
+                <SortableList
+                  items={g.items}
+                  getId={(it) => it.product.id}
+                  getLabel={(it) => it.product.name}
+                  onReorder={(ids) => reorderProducts(storeId, g.category.id, ids)}
+                >
+                  {(it, handle) => (
+                    <div className="row">
+                      <span className="row-main">
+                        <span className="row-name">{it.product.name}</span>
+                        {it.entry.note && <span className="row-note">{it.entry.note}</span>}
+                      </span>
+                      {it.entry.qty && <span className="row-qty">{it.entry.qty}</span>}
+                      {handle}
+                    </div>
+                  )}
+                </SortableList>
+              </section>
+            ))}
+            {view.groups.length === 0 && <p className="empty">Hier gibt es gerade nichts zu sortieren.</p>}
+          </>
+        )}
+        {view && !isSorting && (
+          <>
+            {view.groups.map((g) => (
+              <section key={g.category.id}>
+                <h2 className="cat">
+                  <span>{g.category.name}</span>
+                  <span>{g.open || "erledigt"}</span>
+                </h2>
+                {g.items.map(row)}
+              </section>
+            ))}
+            {view.groups.length === 0 && (
+              <p className="empty">
+                {all.some((it) => it.list.id === list.id)
+                  ? mode === "nur"
+                    ? `Aus „${list.name}“ musst du nichts eigens bei ${store_?.name} kaufen.`
+                    : `Nichts aus „${list.name}“ ist bei ${store_?.name} erhältlich.`
+                  : "Die Liste ist leer – unten etwas hinzufügen."}
+              </p>
+            )}
+            {view.others.map((o) => {
+              const key = `other:${o.list.id}`;
+              return (
+                <section key={key} className="box">
+                  <button className="box-head" aria-expanded={isOpen(key)} onClick={() => toggleOpen(key)}>
+                    <span className="chev"><ChevronRight size={18} /></span>
+                    <span>Aus {o.list.name}</span>
+                    <span className="pill">{o.open}</span>
+                  </button>
+                  {isOpen(key) && <div className="box-body">{o.items.map(row)}</div>}
+                </section>
+              );
+            })}
+            {view.notHere.length > 0 && (
+              <section className="box">
+                <button className="box-head" aria-expanded={isOpen("na")} onClick={() => toggleOpen("na")}>
+                  <span className="chev"><ChevronRight size={18} /></span>
+                  <span>Nicht hier erhältlich</span>
+                  <span className="pill">{view.notHere.length}</span>
+                </button>
+                {isOpen("na") && (
+                  <div className="box-body">
+                    {view.notHere.map((it) => {
+                      const target = it.primary ? s.stores.get(it.primary) : undefined;
+                      return (
+                        <button key={it.entry.id} className="row" onClick={() => target && setPrefs({ tab: target.id })}>
+                          <span className="na-name">{it.product.name}</span>
+                          {target && (
+                            <span className="store-chip" style={{ "--c": target.color } as CSSProperties}>
+                              {target.name}
+                              <ArrowRight size={13} />
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </section>
+            )}
+          </>
+        )}
+        {plan && (
+          <>
+            {plan.map((g) => (
+              <section key={g.store.id}>
+                <div className="store-head" style={{ "--c": g.store.color } as CSSProperties}>
+                  <span className="dot" />
+                  <h2>
+                    {g.store.name} <small>· {g.open} offen</small>
+                  </h2>
+                  {list.storeIds.includes(g.store.id) && (
+                    <button className="go-btn" onClick={() => setPrefs({ tab: g.store.id })}>
+                      Zum Laden <ArrowRight size={15} />
+                    </button>
+                  )}
+                </div>
+                {g.items.map(row)}
+              </section>
+            ))}
+            {plan.length === 0 && <p className="empty">Die Liste ist leer – unten etwas hinzufügen.</p>}
+          </>
+        )}
+      </main>
+
+      {!isSorting && (
+        <footer className="foot">
+          {doneAll > 0 && (
+            <button className="finish-btn" onClick={onFinish}>
+              <CheckCircle size={18} />
+              Einkauf abschließen · {doneAll} erledigt
+            </button>
+          )}
+          <button className="add-btn" onClick={() => setSheet({ kind: "add" })}>
+            <Plus size={22} />
+            Artikel hinzufügen…
+          </button>
+        </footer>
+      )}
+
+      {toast && (
+        <div className="toast" role="status">
+          <span>{toast.text}</span>
+          {toast.undo && (
+            <button
+              onClick={() => {
+                toast.undo?.();
+                setToast(null);
+              }}
+            >
+              Rückgängig
+            </button>
+          )}
+        </div>
+      )}
+
+      {menu && <button className="backdrop" aria-label="Menü schließen" onClick={() => setMenu(null)} />}
+      {menu === "list" && (
+        <div className="menu left" role="menu">
+          {lists.map((l) => (
+            <button
+              key={l.id}
+              className="menu-item"
+              role="menuitemradio"
+              aria-checked={l.id === list.id}
+              aria-pressed={l.id === list.id}
+              onClick={closeMenuAnd(() => setPrefs({ listId: l.id }))}
+            >
+              {l.name}
+              <small>{all.filter((it) => it.list.id === l.id && !it.entry.checked).length} offen</small>
+            </button>
+          ))}
+          <div className="menu-sep" />
+          <button className="menu-item" role="menuitem" onClick={closeMenuAnd(() => setSettings({ kind: "list", id: list.id }))}>
+            <SettingsIcon size={20} />
+            Liste bearbeiten
+          </button>
+        </div>
+      )}
+      {menu === "more" && (
+        <div className="menu right" role="menu">
+          <button className="menu-item" role="menuitem" onClick={onSyncNow}>
+            <Refresh size={20} />
+            Jetzt synchronisieren
+            <small>{ago(st.lastSyncAt)}</small>
+          </button>
+          <button className="menu-item" role="menuitemcheckbox" aria-checked={prefs.shopping} onClick={closeMenuAnd(() => setPrefs((p) => ({ shopping: !p.shopping })))}>
+            <Cart size={20} />
+            Einkaufsmodus
+            {prefs.shopping && <span className="on">an</span>}
+          </button>
+          {storeId && store_ && (
+            <>
+              <button className="menu-item" role="menuitem" onClick={closeMenuAnd(() => setSorting(true))}>
+                <SortIcon size={20} />
+                Reihenfolge ändern
+              </button>
+              <button className="menu-item" role="menuitem" onClick={closeMenuAnd(() => setSettings({ kind: "store", id: store_.id }))}>
+                <Route size={20} />
+                Laufweg {store_.name}
+              </button>
+            </>
+          )}
+          <button className="menu-item" role="menuitem" onClick={closeMenuAnd(() => setSheet({ kind: "invite" }))}>
+            <UserPlus size={20} />
+            Mitglied einladen
+          </button>
+          <button className="menu-item" role="menuitem" onClick={closeMenuAnd(() => setSettings({ kind: "root" }))}>
+            <SettingsIcon size={20} />
+            Einstellungen
+          </button>
+          {needRefresh && (
+            <button className="menu-item" role="menuitem" onClick={install}>
+              <Download size={20} />
+              Update installieren
+            </button>
+          )}
+          <div className="menu-sep" />
+          <div className="menu-note">
+            {st.session?.householdName} · angemeldet als {st.session?.memberName}
+            {st.pending > 0 && <><br />{plural(st.pending, "Änderung wartet", "Änderungen warten")} auf Sync</>}
+            {st.lastError && <><br />{st.lastError}</>}
+          </div>
+        </div>
+      )}
+
+      {sheet?.kind === "add" && <AddSheet listId={list.id} onClose={() => setSheet(null)} onToast={showToast} />}
+      {sheet?.kind === "edit" && <EditSheet entryId={sheet.id} onClose={() => setSheet(null)} onToast={showToast} />}
+      {sheet?.kind === "invite" && <InviteSheet onClose={() => setSheet(null)} />}
+      {settings && <Settings start={settings} currentListId={list.id} onClose={() => setSettings(null)} onToast={showToast} />}
+    </div>
+  );
+}
+
+function SyncChip({ onClick }: { onClick: () => void }) {
+  const st = useStore();
+  let state: "ok" | "busy" | "offline" | "error";
+  let label: string;
+  let icon;
+  if (st.status === "offline") {
+    state = "offline";
+    label = st.pending ? `Offline · ${st.pending}` : "Offline";
+    icon = <CloudOff size={17} />;
+  } else if (st.status === "error") {
+    state = "error";
+    label = "Fehler";
+    icon = <CloudOff size={17} />;
+  } else if (st.pending > 0) {
+    // Online werden eigene Änderungen nach ~1,5 s hochgeladen – kurz „Sync…“ statt eines Zählers.
+    state = "busy";
+    label = "Sync…";
+    icon = <CloudSync size={17} />;
+  } else {
+    // Ein Hintergrund-Abgleich ohne eigene Änderungen soll nicht flackern.
+    state = "ok";
+    label = "Synchron";
+    icon = <CloudOk size={17} />;
+  }
+  return (
+    <button className="sync-chip" data-state={state} onClick={onClick} aria-label={`${label}. Tippen: jetzt synchronisieren`}>
+      {icon}
+      {label}
+    </button>
+  );
+}
