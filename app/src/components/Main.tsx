@@ -1,7 +1,7 @@
 import { badgeCount, defaultList, isExclusive, items, primaryGroups, shownAt, sortedLists, sortedStores, storeView, type Item, type Mode } from "@shared/view.ts";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { ArrowRight, Cart, CheckCircle, ChevronDown, ChevronRight, CloudOff, CloudOk, CloudSync, Download, Eye, EyeOff, More, Plus, Refresh, Route, Settings as SettingsIcon, SortIcon, UserPlus } from "../icons.tsx";
-import { finishTrip, reorderProducts } from "../lib/actions.ts";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
+import { ArrowRight, Cart, CheckCircle, ChevronDown, ChevronRight, CloudOff, CloudOk, CloudSync, Download, Eye, EyeOff, More, Plus, Refresh, Route, Settings as SettingsIcon, UserPlus } from "../icons.tsx";
+import { finishTrip, reorderProducts, toggleChecked } from "../lib/actions.ts";
 import { ago, plural } from "../lib/format.ts";
 import { setPrefs, usePrefs } from "../lib/prefs.ts";
 import { usePwaUpdate } from "../lib/pwa.ts";
@@ -26,7 +26,6 @@ export function Main() {
   const [menu, setMenu] = useState<"list" | "more" | null>(null);
   const [sheet, setSheet] = useState<Sheet>(null);
   const [settings, setSettings] = useState<SettingsPage | null>(null);
-  const [sorting, setSorting] = useState(false);
   const [toast, setToast] = useState<Toast | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
   const contentRef = useRef<HTMLElement>(null);
@@ -48,8 +47,8 @@ export function Main() {
       text: ok ? "Synchronisiert" : store.status === "offline" ? "Offline – Änderungen bleiben gespeichert" : store.lastError || "Sync fehlgeschlagen",
     });
   };
-  // Erst aktiv, wenn die Liste da ist (vorher gibt es kein Scroll-Element) und nicht beim Sortieren.
-  const ptr = usePullToRefresh(contentRef, onSyncNow, !sorting && s.lists.size > 0);
+  // Erst aktiv, wenn die Liste da ist (vorher gibt es kein Scroll-Element).
+  const ptr = usePullToRefresh(contentRef, onSyncNow, s.lists.size > 0);
 
   const lists = sortedLists(s);
   const list = s.lists.get(prefs.listId) ?? defaultList(s);
@@ -67,7 +66,6 @@ export function Main() {
   const storeId = tab === "alle" ? null : tab;
   const store_ = storeId ? s.stores.get(storeId) : undefined;
   const mode: Mode = (storeId && prefs.modes[storeId]) || "alles";
-  const isSorting = sorting && !!storeId;
   const view = storeId ? storeView(s, all, { storeId, mode, hideDone: prefs.hideDone }) : null;
   const plan = storeId ? null : primaryGroups(s, all, list.id, prefs.hideDone);
 
@@ -80,8 +78,21 @@ export function Main() {
     return name && name !== myName ? name : undefined;
   };
   const dotFor = (it: Item) => (storeId && mode === "alles" && !it.entry.checked && isExclusive(it, storeId) ? store_?.color : undefined);
-  const row = (it: Item) => (
-    <ItemRow key={it.entry.id} item={it} dotColor={dotFor(it)} checkedBy={byName(it)} onEdit={(id) => setSheet({ kind: "edit", id })} />
+  // Jedes Abhaken lässt sich rückgängig machen – ausgeblendete Erledigte verschwinden sonst einfach.
+  const onToggle = (it: Item) => {
+    const undo = toggleChecked(it.entry);
+    showToast({ text: `${it.product.name} ${it.entry.checked ? "wieder offen" : "abgehakt"}`, undo });
+  };
+  const row = (it: Item, handle?: ReactNode) => (
+    <ItemRow
+      key={it.entry.id}
+      item={it}
+      dotColor={dotFor(it)}
+      checkedBy={byName(it)}
+      onToggle={onToggle}
+      onEdit={(id) => setSheet({ kind: "edit", id })}
+      handle={handle}
+    />
   );
 
   const doneShown = all.filter((it) => it.entry.checked && (storeId ? shownAt(it, storeId, mode) : it.list.id === list.id)).length;
@@ -100,7 +111,7 @@ export function Main() {
   };
 
   return (
-    <div className={prefs.shopping ? "app shopping" : "app"} style={{ "--toast-bottom": isSorting ? "24px" : doneAll ? "128px" : "78px" } as CSSProperties}>
+    <div className={prefs.shopping ? "app shopping" : "app"}>
       <header className="top">
         <div className="top-row">
           <button className="list-btn" onClick={() => setMenu(menu === "list" ? null : "list")} aria-haspopup="menu" aria-expanded={menu === "list"}>
@@ -128,10 +139,7 @@ export function Main() {
           <button
             className="tab"
             aria-pressed={tab === "alle"}
-            onClick={() => {
-              setSorting(false);
-              setPrefs({ tab: "alle" });
-            }}
+            onClick={() => setPrefs({ tab: "alle" })}
           >
             Alle
           </button>
@@ -146,52 +154,42 @@ export function Main() {
       )}
 
       <div className="modebar">
-        {isSorting ? (
+        {prefs.shopping && (
           <div className="mode-bar">
-            <SortIcon size={18} />
-            <span>Am Griff ziehen – Reihenfolge bei {store_?.name}</span>
-            <button onClick={() => setSorting(false)}>Fertig</button>
+            <Cart size={18} />
+            <span>Einkaufsmodus – Display bleibt an</span>
+            <button onClick={() => setPrefs({ shopping: false })}>Beenden</button>
           </div>
-        ) : (
-          <>
-            {prefs.shopping && (
-              <div className="mode-bar">
-                <Cart size={18} />
-                <span>Einkaufsmodus – Display bleibt an</span>
-                <button onClick={() => setPrefs({ shopping: false })}>Beenden</button>
-              </div>
-            )}
-            <div className="modebar-row">
-              {storeId ? (
-                <div className="seg" role="group" aria-label="Ansicht">
-                  <button aria-pressed={mode === "alles"} onClick={() => setPrefs((p) => ({ modes: { ...p.modes, [storeId]: "alles" } }))}>
-                    Alles hier
-                  </button>
-                  <button aria-pressed={mode === "nur"} onClick={() => setPrefs((p) => ({ modes: { ...p.modes, [storeId]: "nur" } }))}>
-                    Nur für hier
-                  </button>
-                </div>
-              ) : (
-                <span className="plan-hint">Nach Geschäft geplant</span>
-              )}
-              <button
-                className="hide-btn"
-                aria-pressed={prefs.hideDone}
-                aria-label={prefs.hideDone ? "Erledigte sind ausgeblendet – tippen zum Anzeigen" : "Erledigte ausblenden"}
-                onClick={() => setPrefs((p) => ({ hideDone: !p.hideDone }))}
-              >
-                {prefs.hideDone ? <EyeOff size={18} /> : <Eye size={18} />}
-                Erledigte
-                {doneShown > 0 && <span className="count">{doneShown}</span>}
+        )}
+        <div className="modebar-row">
+          {storeId ? (
+            <div className="seg" role="group" aria-label="Ansicht">
+              <button aria-pressed={mode === "alles"} onClick={() => setPrefs((p) => ({ modes: { ...p.modes, [storeId]: "alles" } }))}>
+                Alles hier
+              </button>
+              <button aria-pressed={mode === "nur"} onClick={() => setPrefs((p) => ({ modes: { ...p.modes, [storeId]: "nur" } }))}>
+                Nur für hier
               </button>
             </div>
-            {hasDots && (
-              <span className="legend">
-                <span className="dot" style={{ "--c": store_?.color } as CSSProperties} />
-                Punkt = dafür musst du eigens herkommen
-              </span>
-            )}
-          </>
+          ) : (
+            <span className="plan-hint">Nach Geschäft geplant</span>
+          )}
+          <button
+            className="hide-btn"
+            aria-pressed={prefs.hideDone}
+            aria-label={prefs.hideDone ? "Erledigte sind ausgeblendet – tippen zum Anzeigen" : "Erledigte ausblenden"}
+            onClick={() => setPrefs((p) => ({ hideDone: !p.hideDone }))}
+          >
+            {prefs.hideDone ? <EyeOff size={18} /> : <Eye size={18} />}
+            Erledigte
+            {doneShown > 0 && <span className="count">{doneShown}</span>}
+          </button>
+        </div>
+        {hasDots && (
+          <span className="legend">
+            <span className="dot" style={{ "--c": store_?.color } as CSSProperties} />
+            Punkt = dafür musst du eigens herkommen
+          </span>
         )}
       </div>
 
@@ -204,34 +202,7 @@ export function Main() {
             {ptr.refreshing ? "Synchronisiere…" : ptr.pull >= PULL_THRESHOLD ? "Loslassen zum Synchronisieren" : "Zum Synchronisieren ziehen"}
           </div>
         )}
-        {view && isSorting && storeId && (
-          <>
-            {view.groups.map((g) => (
-              <section key={g.category.id}>
-                <h2 className="cat"><span>{g.category.name}</span></h2>
-                <SortableList
-                  items={g.items}
-                  getId={(it) => it.product.id}
-                  getLabel={(it) => it.product.name}
-                  onReorder={(ids) => reorderProducts(storeId, g.category.id, ids)}
-                >
-                  {(it, handle) => (
-                    <div className="row">
-                      <span className="row-main">
-                        <span className="row-name">{it.product.name}</span>
-                        {it.entry.note && <span className="row-note">{it.entry.note}</span>}
-                      </span>
-                      {it.entry.qty && <span className="row-qty">{it.entry.qty}</span>}
-                      {handle}
-                    </div>
-                  )}
-                </SortableList>
-              </section>
-            ))}
-            {view.groups.length === 0 && <p className="empty">Hier gibt es gerade nichts zu sortieren.</p>}
-          </>
-        )}
-        {view && !isSorting && (
+        {view && storeId && (
           <>
             {view.groups.map((g) => (
               <section key={g.category.id}>
@@ -239,7 +210,15 @@ export function Main() {
                   <span>{g.category.name}</span>
                   <span>{g.open || "erledigt"}</span>
                 </h2>
-                {g.items.map(row)}
+                {/* Ausgeblendete Erledigte behalten beim Umsortieren ihren Platz. */}
+                <SortableList
+                  items={g.items}
+                  getId={(it) => it.product.id}
+                  getLabel={(it) => it.product.name}
+                  onReorder={(ids) => reorderProducts(storeId, g.category.id, ids)}
+                >
+                  {(it, handle) => row(it, handle)}
+                </SortableList>
               </section>
             ))}
             {view.groups.length === 0 && (
@@ -301,20 +280,12 @@ export function Main() {
         )}
       </main>
 
-      {!isSorting && (
-        <footer className="foot">
-          {doneAll > 0 && (
-            <button className="finish-btn" onClick={onFinish}>
-              <CheckCircle size={18} />
-              Einkauf abschließen · {doneAll} erledigt
-            </button>
-          )}
-          <button className="add-btn" onClick={() => setSheet({ kind: "add" })}>
-            <Plus size={22} />
-            Artikel hinzufügen…
-          </button>
-        </footer>
-      )}
+      <footer className="foot">
+        <button className="add-btn" onClick={() => setSheet({ kind: "add" })}>
+          <Plus size={22} />
+          Artikel hinzufügen…
+        </button>
+      </footer>
 
       {toast && (
         <div className="toast" role="status">
@@ -367,17 +338,18 @@ export function Main() {
             Einkaufsmodus
             {prefs.shopping && <span className="on">an</span>}
           </button>
-          {storeId && store_ && (
-            <>
-              <button className="menu-item" role="menuitem" onClick={closeMenuAnd(() => setSorting(true))}>
-                <SortIcon size={20} />
-                Reihenfolge ändern
-              </button>
-              <button className="menu-item" role="menuitem" onClick={closeMenuAnd(() => setSettings({ kind: "store", id: store_.id }))}>
-                <Route size={20} />
-                Laufweg {store_.name}
-              </button>
-            </>
+          {doneAll > 0 && (
+            <button className="menu-item" role="menuitem" onClick={closeMenuAnd(onFinish)}>
+              <CheckCircle size={20} />
+              Einkauf abschließen
+              <small>{doneAll} erledigt</small>
+            </button>
+          )}
+          {store_ && (
+            <button className="menu-item" role="menuitem" onClick={closeMenuAnd(() => setSettings({ kind: "store", id: store_.id }))}>
+              <Route size={20} />
+              Laufweg {store_.name}
+            </button>
           )}
           <button className="menu-item" role="menuitem" onClick={closeMenuAnd(() => setSheet({ kind: "invite" }))}>
             <UserPlus size={20} />

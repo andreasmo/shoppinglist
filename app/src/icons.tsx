@@ -55,7 +55,6 @@ export const Settings = ({ size }: P) => (
 export const Cart = ({ size }: P) => (
   <Icon size={size}><circle cx="9" cy="20" r="1.5" /><circle cx="18" cy="20" r="1.5" /><path d="M2 3h3l2.7 12.4a1.5 1.5 0 0 0 1.5 1.1h8.6a1.5 1.5 0 0 0 1.5-1.2L21 7H6" /></Icon>
 );
-export const SortIcon = ({ size }: P) => <Icon size={size}><path d="M8 4v16M4 8l4-4 4 4M16 20V4M12 16l4 4 4-4" /></Icon>;
 export const Route = ({ size }: P) => (
   <Icon size={size}><circle cx="6" cy="19" r="2" /><circle cx="18" cy="5" r="2" /><path d="M8 19h8.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H16" /></Icon>
 );

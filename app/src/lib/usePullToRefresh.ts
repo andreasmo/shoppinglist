@@ -22,7 +22,9 @@ export function usePullToRefresh(ref: RefObject<HTMLElement | null>, onRefresh: 
     let current = 0;
 
     const onStart = (e: TouchEvent) => {
-      startY = el.scrollTop <= 0 && e.touches.length === 1 ? e.touches[0].clientY : null;
+      // Am Sortiergriff wird umsortiert, nicht aktualisiert.
+      const onHandle = e.target instanceof Element && e.target.closest(".drag-handle");
+      startY = el.scrollTop <= 0 && e.touches.length === 1 && !onHandle ? e.touches[0].clientY : null;
     };
     const onMove = (e: TouchEvent) => {
       if (startY === null) return;

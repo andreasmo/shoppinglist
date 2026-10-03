@@ -71,7 +71,8 @@ export function addToList(product: Product | NewProduct, qty: string): AddResult
   return result;
 }
 
-export function toggleChecked(entry: Entry) {
+/** Hakt ab bzw. holt zurück. Liefert die Rückgängig-Funktion. */
+export function toggleChecked(entry: Entry): () => void {
   try {
     navigator.vibrate?.(10);
   } catch {
@@ -79,6 +80,7 @@ export function toggleChecked(entry: Entry) {
   }
   const checked = !entry.checked;
   store.mutate("entry", entry.id, { checked, checkedBy: checked ? me() : null, checkedAt: checked ? Date.now() : 0 });
+  return restorer([entry]);
 }
 
 export function updateEntry(id: string, fields: Partial<Pick<Entry, "qty" | "note" | "onlyStore">>) {

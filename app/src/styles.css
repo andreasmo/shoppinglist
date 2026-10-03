@@ -163,10 +163,12 @@ button.row:active { background: var(--row-active); }
 .sortable.dragging > * { background: var(--surface); }
 .drag-handle { flex: none; width: 44px; height: 44px; margin-right: -10px; display: flex; align-items: center; justify-content: center; color: var(--muted); touch-action: none; cursor: grab; }
 .drag-handle:active { cursor: grabbing; }
+.row-line { display: flex; align-items: center; background: var(--bg); }
+.row-line > .row { flex: 1; min-width: 0; padding-right: 0; }
+.row-line > .drag-handle { margin-right: 4px; color: var(--faint); }
 
 /* ---------- Fuß ---------- */
 .foot { border-top: 1px solid var(--line); background: var(--bg); padding: 8px 12px calc(10px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; gap: 8px; }
-.finish-btn { min-height: 42px; display: flex; align-items: center; justify-content: center; gap: 8px; border-radius: 12px; font-size: 15px; font-weight: 700; background: var(--soft); }
 .add-btn { min-height: 48px; display: flex; align-items: center; gap: 12px; padding: 0 16px; border-radius: 24px; background: var(--soft); color: var(--muted); font-size: 16px; }
 .add-btn .ic { color: var(--ink); }
 
@@ -221,7 +223,7 @@ button.row:active { background: var(--row-active); }
 .invite-link { font-size: 14px; color: var(--muted); text-align: center; overflow-wrap: anywhere; }
 .hint { margin: 0; font-size: 14px; line-height: 1.45; color: var(--muted); }
 .error { margin: 0; font-size: 14px; color: var(--err-fg); }
-.toast { position: absolute; left: 12px; right: 12px; bottom: calc(var(--toast-bottom, 80px) + env(safe-area-inset-bottom)); z-index: 45; min-height: 48px; display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 16px; border-radius: 14px; background: var(--toast-bg); color: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25); animation: up 0.2s ease-out; }
+.toast { position: absolute; left: 12px; right: 12px; bottom: calc(78px + env(safe-area-inset-bottom)); z-index: 45; min-height: 48px; display: flex; align-items: center; gap: 8px; padding: 4px 6px 4px 16px; border-radius: 14px; background: var(--toast-bg); color: #fff; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25); animation: up 0.2s ease-out; }
 .toast span { flex: 1; font-size: 15px; }
 .toast button { min-height: 44px; padding: 0 12px; font-size: 15px; font-weight: 700; color: #a9c1f7; }
 @keyframes up { from { transform: translateY(14px); opacity: 0; } to { transform: none; opacity: 1; } }
