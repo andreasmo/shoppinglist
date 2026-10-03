@@ -18,15 +18,8 @@ export interface CategoryGroup {
   open: number;
 }
 
-export interface OtherListGroup {
-  list: List;
-  items: Item[];
-  open: number;
-}
-
 export interface StoreView {
   groups: CategoryGroup[];
-  others: OtherListGroup[];
   notHere: Item[];
 }
 
@@ -46,6 +39,11 @@ export function primaryStore(entry: Entry, product: Product, list: List | undefi
 
 export function isAvailableAt(item: Item, storeId: string): boolean {
   return item.entry.onlyStore ? item.entry.onlyStore === storeId : item.product.avail.includes(storeId);
+}
+
+/** Erscheint der Eintrag in der Ansicht dieses Geschäfts (abgehakt oder nicht)? */
+export function shownAt(item: Item, storeId: string, mode: Mode): boolean {
+  return mode === "nur" ? item.primary === storeId : isAvailableAt(item, storeId);
 }
 
 /** Muss man für diesen Eintrag eigens in dieses Geschäft (und es ist nicht das Hauptgeschäft der Liste)? */
@@ -149,31 +147,21 @@ function groupByCategory(s: Snapshot, sorted: Item[]): CategoryGroup[] {
 }
 
 export interface StoreViewOptions {
-  listId: string;
   storeId: string;
   mode: Mode;
   hideDone: boolean;
 }
 
+/** Ansicht eines Geschäfts: alle Listen zusammen in einem Laufweg – im Laden spielt die Liste keine Rolle. */
 export function storeView(s: Snapshot, all: Item[], o: StoreViewOptions): StoreView {
-  const visible = (it: Item) =>
-    (o.mode === "nur" ? it.primary === o.storeId : isAvailableAt(it, o.storeId)) && !(o.hideDone && it.entry.checked);
+  const visible = all.filter((it) => shownAt(it, o.storeId, o.mode) && !(o.hideDone && it.entry.checked));
+  const groups = groupByCategory(s, sortForStore(s, visible, o.storeId));
 
-  const mine = all.filter((it) => it.list.id === o.listId);
-  const groups = groupByCategory(s, sortForStore(s, mine.filter(visible), o.storeId));
-
-  const others: OtherListGroup[] = [];
-  for (const list of sortedLists(s)) {
-    if (list.id === o.listId) continue;
-    const its = sortForStore(s, all.filter((it) => it.list.id === list.id && visible(it)), o.storeId);
-    if (its.length) others.push({ list, items: its, open: its.filter((i) => !i.entry.checked).length });
-  }
-
-  const notHere = mine
+  const notHere = all
     .filter((it) => !it.entry.checked && !isAvailableAt(it, o.storeId))
     .sort((a, b) => a.product.name.localeCompare(b.product.name, "de"));
 
-  return { groups, others, notHere };
+  return { groups, notHere };
 }
 
 /** Planungsansicht „Alle“: Einträge einer Liste, gruppiert nach dem Geschäft, in dem sie gekauft werden. */

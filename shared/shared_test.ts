@@ -34,10 +34,10 @@ Deno.test("Kaufland zeigt im Modus „alles“ auch Aldi-Artikel, „nur“ nur 
   const s = snapshotWith({ Milch: {}, Sumach: {}, Bananen: { checked: true } }, [sumach]);
   const all = items(s);
 
-  const alles = storeView(s, all, { listId: "leb", storeId: "kaufland", mode: "alles", hideDone: false });
+  const alles = storeView(s, all, { storeId: "kaufland", mode: "alles", hideDone: false });
   assertEquals(alles.groups.flatMap((g) => names(g.items)), ["Bananen", "Milch", "Sumach"]); // Laufweg Kaufland: Obst → Kühlregal → … → Gewürze
 
-  const nur = storeView(s, all, { listId: "leb", storeId: "kaufland", mode: "nur", hideDone: false });
+  const nur = storeView(s, all, { storeId: "kaufland", mode: "nur", hideDone: false });
   assertEquals(nur.groups.flatMap((g) => names(g.items)), ["Sumach"]);
 
   assertEquals(badgeCount(all, "kaufland"), 1);
@@ -47,20 +47,18 @@ Deno.test("Kaufland zeigt im Modus „alles“ auch Aldi-Artikel, „nur“ nur 
 Deno.test("Abgehakte Einträge behalten ihre Position; ausblenden entfernt sie nur", () => {
   const s = snapshotWith({ Milch: {}, Butter: { checked: true }, Joghurt: {} });
   const all = items(s);
-  const shown = storeView(s, all, { listId: "leb", storeId: "aldi", mode: "alles", hideDone: false });
+  const shown = storeView(s, all, { storeId: "aldi", mode: "alles", hideDone: false });
   assertEquals(names(shown.groups[0].items), ["Butter", "Joghurt", "Milch"]);
-  const hidden = storeView(s, all, { listId: "leb", storeId: "aldi", mode: "alles", hideDone: true });
+  const hidden = storeView(s, all, { storeId: "aldi", mode: "alles", hideDone: true });
   assertEquals(names(hidden.groups[0].items), ["Joghurt", "Milch"]);
 });
 
-Deno.test("Andere Listen erscheinen als eigene Gruppe, nicht Erhältliches separat", () => {
+Deno.test("Geschäfts-Ansicht mischt alle Listen in einen Laufweg, nicht Erhältliches separat", () => {
   const s = snapshotWith({ Milch: {}, Pflaster: {}, Zahnpasta: {} });
   const all = items(s);
-  const v = storeView(s, all, { listId: "leb", storeId: "aldi", mode: "alles", hideDone: false });
-  assertEquals(v.others.map((o) => [o.list.name, names(o.items)]), [["Drogerie", ["Zahnpasta"]]]);
-
-  const dro = storeView(s, all, { listId: "dro", storeId: "aldi", mode: "alles", hideDone: false });
-  assertEquals(names(dro.notHere), ["Pflaster"]);
+  const v = storeView(s, all, { storeId: "aldi", mode: "alles", hideDone: false });
+  assertEquals(v.groups.flatMap((g) => names(g.items)).sort(), ["Milch", "Zahnpasta"]);
+  assertEquals(names(v.notHere), ["Pflaster"]);
 });
 
 Deno.test("Planungsansicht gruppiert nach primärem Geschäft", () => {
@@ -82,7 +80,7 @@ Deno.test("Manuelle Reihenfolge: Positionen vor Name, nicht angezeigte behalten 
   raw.push({ tbl: "product", rid: productIdFor("Sahne"), data: { name: "Sahne", listId: "leb", categoryId: "kuehl", avail: ["aldi"], "pos:aldi": positionKey(0) } });
   for (const n of ["Milch", "Sahne", "Butter"]) raw.push({ tbl: "entry", rid: productIdFor(n), data: { checked: false } });
   const s = buildSnapshot(raw);
-  const v = storeView(s, items(s), { listId: "leb", storeId: "aldi", mode: "alles", hideDone: false });
+  const v = storeView(s, items(s), { storeId: "aldi", mode: "alles", hideDone: false });
   assertEquals(names(v.groups[0].items), ["Sahne", "Milch", "Butter"]); // Butter ohne Position ans Ende
   assertEquals(categoryOrder(s, "aldi", "kuehl").slice(0, 2).map((p) => p.name), ["Sahne", "Milch"]);
 });

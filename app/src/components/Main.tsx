@@ -1,4 +1,4 @@
-import { badgeCount, defaultList, isExclusive, items, primaryGroups, sortedLists, storeView, type Item, type Mode } from "@shared/view.ts";
+import { badgeCount, defaultList, isExclusive, items, primaryGroups, shownAt, sortedLists, sortedStores, storeView, type Item, type Mode } from "@shared/view.ts";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { ArrowRight, Cart, CheckCircle, ChevronDown, ChevronRight, CloudOff, CloudOk, CloudSync, Download, Eye, EyeOff, More, Plus, Refresh, Route, Settings as SettingsIcon, SortIcon, UserPlus } from "../icons.tsx";
 import { finishTrip, reorderProducts } from "../lib/actions.ts";
@@ -61,12 +61,14 @@ export function Main() {
     );
   }
 
-  const tab = prefs.tab === "alle" || list.storeIds.includes(prefs.tab) ? prefs.tab : (list.storeIds[0] ?? "alle");
+  // Geschäfts-Tabs gelten für alle Listen; nur „Alle“ (Planung) zeigt die gewählte Liste.
+  const stores = sortedStores(s);
+  const tab = prefs.tab === "alle" || s.stores.has(prefs.tab) ? prefs.tab : (list.storeIds.find((id) => s.stores.has(id)) ?? stores[0]?.id ?? "alle");
   const storeId = tab === "alle" ? null : tab;
   const store_ = storeId ? s.stores.get(storeId) : undefined;
   const mode: Mode = (storeId && prefs.modes[storeId]) || "alles";
   const isSorting = sorting && !!storeId;
-  const view = storeId ? storeView(s, all, { listId: list.id, storeId, mode, hideDone: prefs.hideDone }) : null;
+  const view = storeId ? storeView(s, all, { storeId, mode, hideDone: prefs.hideDone }) : null;
   const plan = storeId ? null : primaryGroups(s, all, list.id, prefs.hideDone);
 
   const me = st.session?.memberId;
@@ -82,10 +84,9 @@ export function Main() {
     <ItemRow key={it.entry.id} item={it} dotColor={dotFor(it)} checkedBy={byName(it)} onEdit={(id) => setSheet({ kind: "edit", id })} />
   );
 
-  const doneInList = all.filter((it) => it.list.id === list.id && it.entry.checked).length;
+  const doneShown = all.filter((it) => it.entry.checked && (storeId ? shownAt(it, storeId, mode) : it.list.id === list.id)).length;
   const doneAll = all.filter((it) => it.entry.checked).length;
-  const idx = storeId ? list.storeIds.indexOf(storeId) : -1;
-  const higher = idx > 0 ? list.storeIds.slice(0, idx).map((id) => s.stores.get(id)?.name ?? id).join(" oder ") : "";
+  const hasDots = !!view && view.groups.some((g) => g.items.some((it) => dotFor(it)));
   const isOpen = (key: string) => prefs.open[key] === true;
   const toggleOpen = (key: string) => setPrefs((p) => ({ open: { ...p.open, [key]: !p.open[key] } }));
 
@@ -115,12 +116,10 @@ export function Main() {
           </div>
         </div>
         <nav className="tabs" aria-label="Geschäfte">
-          {list.storeIds.map((id) => {
-            const st_ = s.stores.get(id);
-            if (!st_) return null;
-            const n = badgeCount(all, id);
+          {stores.map((st_) => {
+            const n = badgeCount(all, st_.id);
             return (
-              <button key={id} className="tab" aria-pressed={tab === id} style={{ "--c": st_.color } as CSSProperties} onClick={() => setPrefs({ tab: id })}>
+              <button key={st_.id} className="tab" aria-pressed={tab === st_.id} style={{ "--c": st_.color } as CSSProperties} onClick={() => setPrefs({ tab: st_.id })}>
                 {st_.name}
                 {n > 0 && <span className="badge">{n}</span>}
               </button>
@@ -183,13 +182,13 @@ export function Main() {
               >
                 {prefs.hideDone ? <EyeOff size={18} /> : <Eye size={18} />}
                 Erledigte
-                {doneInList > 0 && <span className="count">{doneInList}</span>}
+                {doneShown > 0 && <span className="count">{doneShown}</span>}
               </button>
             </div>
-            {storeId && mode === "alles" && idx > 0 && (
+            {hasDots && (
               <span className="legend">
                 <span className="dot" style={{ "--c": store_?.color } as CSSProperties} />
-                Punkt = gibt’s nicht bei {higher}
+                Punkt = dafür musst du eigens herkommen
               </span>
             )}
           </>
@@ -245,26 +244,13 @@ export function Main() {
             ))}
             {view.groups.length === 0 && (
               <p className="empty">
-                {all.some((it) => it.list.id === list.id)
+                {all.length > 0
                   ? mode === "nur"
-                    ? `Aus „${list.name}“ musst du nichts eigens bei ${store_?.name} kaufen.`
-                    : `Nichts aus „${list.name}“ ist bei ${store_?.name} erhältlich.`
-                  : "Die Liste ist leer – unten etwas hinzufügen."}
+                    ? `Bei ${store_?.name} musst du nichts eigens kaufen.`
+                    : `Nichts von den Listen gibt es bei ${store_?.name}.`
+                  : "Die Listen sind leer – unten etwas hinzufügen."}
               </p>
             )}
-            {view.others.map((o) => {
-              const key = `other:${o.list.id}`;
-              return (
-                <section key={key} className="box">
-                  <button className="box-head" aria-expanded={isOpen(key)} onClick={() => toggleOpen(key)}>
-                    <span className="chev"><ChevronRight size={18} /></span>
-                    <span>Aus {o.list.name}</span>
-                    <span className="pill">{o.open}</span>
-                  </button>
-                  {isOpen(key) && <div className="box-body">{o.items.map(row)}</div>}
-                </section>
-              );
-            })}
             {view.notHere.length > 0 && (
               <section className="box">
                 <button className="box-head" aria-expanded={isOpen("na")} onClick={() => toggleOpen("na")}>
@@ -303,11 +289,9 @@ export function Main() {
                   <h2>
                     {g.store.name} <small>· {g.open} offen</small>
                   </h2>
-                  {list.storeIds.includes(g.store.id) && (
-                    <button className="go-btn" onClick={() => setPrefs({ tab: g.store.id })}>
-                      Zum Laden <ArrowRight size={15} />
-                    </button>
-                  )}
+                  <button className="go-btn" onClick={() => setPrefs({ tab: g.store.id })}>
+                    Zum Laden <ArrowRight size={15} />
+                  </button>
                 </div>
                 {g.items.map(row)}
               </section>

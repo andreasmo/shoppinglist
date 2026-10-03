@@ -61,13 +61,14 @@ Heute (Listonic): eine Liste je Geschäft (Aldi, dm, Kaufland). Aldi ist der Sta
 - Ein neuer Artikel bekommt als Verfügbarkeit standardmäßig das erste Geschäft der Liste. Das lässt sich per Chip ändern.
 
 ### 2.3 Ansichtsmodus je Geschäft (umschaltbar)
-- **„Alles hier“**: alle offenen Einträge, die es in diesem Geschäft gibt. Die Einträge, für die man *eigens* herkommt, tragen einen Punkt in der Farbe des Geschäfts.
+- **„Alles hier“**: alle offenen Einträge, die es in diesem Geschäft gibt. Die Einträge, für die man *eigens* herkommt (primäres Geschäft ist dieses, aber nicht das erste der Liste), tragen einen Punkt in der Farbe des Geschäfts.
 - **„Nur für hier“**: nur Einträge, deren primäres Geschäft dieses ist.
 - Die letzte Wahl merkt sich die App pro Geschäft und Gerät.
 
 ### 2.4 Listenübergreifend
-- In der Ansicht eines Geschäfts stehen unten die offenen Einträge **anderer Listen**, die es dort gibt. Sie sind eingeklappt und je Liste gruppiert, z. B. bei Kaufland in „Lebensmittel“ die Gruppe „Aus Drogerie (2)“. Innerhalb der Gruppe gilt der Laufweg.
-- Der Ansichtsmodus gilt auch dort.
+- **Im Laden spielt die Liste keine Rolle.** Die Ansicht eines Geschäfts zeigt die Einträge **aller Listen** in einem Laufweg, gegliedert nach Warengruppen. Bei Kaufland stehen Lebensmittel und Drogerie-Artikel also gemischt, jeweils dort, wo sie im Laden liegen.
+- Die Tabs zeigen **alle Geschäfte** des Haushalts. Die gewählte Liste wirkt nur in der Planungsansicht „Alle“ und als Ziel beim Hinzufügen.
+- „Nicht hier erhältlich“ sammelt die offenen Einträge aller Listen, die es in diesem Geschäft nicht gibt.
 - **Tab-Badges** zählen über alle Listen, wie viele Einträge man *eigens* in diesem Geschäft kaufen muss. Daran sieht man auf einen Blick, ob sich der Weg zu dm oder Kaufland lohnt.
 
 ---
@@ -103,7 +104,7 @@ Heute (Listonic): eine Liste je Geschäft (Aldi, dm, Kaufland). Aldi ist der Sta
   - kein Zoom beim Tippen ins Eingabefeld (Schrift mindestens 16 px)
 - **Schnell:** Start aus dem Cache in unter 1 s, auch mit 300 Einträgen flüssig.
 
-### 4.2 Hauptansicht (Liste „Lebensmittel“, Geschäft Kaufland, Modus „Alles hier“)
+### 4.2 Hauptansicht (Geschäft Kaufland, Modus „Alles hier“)
 
 ```
 ┌──────────────────────────────────────┐
@@ -119,8 +120,9 @@ Heute (Listonic): eine Liste je Geschäft (Aldi, dm, Kaufland). Aldi ist der Sta
 │ ● Sumach                             │  ← Punkt = nur hier
 │ KÜHLUNG                              │
 │ ○ Milch 2×                           │
+│ KÖRPERPFLEGE                         │
+│ ○ Zahnpasta                          │  ← aus „Drogerie“, im selben Laufweg
 │                                      │
-│ ▸ Aus Drogerie (2)                   │  ← listenübergreifend
 │ ▸ Nicht hier erhältlich (1)          │
 ├──────────────────────────────────────┤
 │ [ + Artikel hinzufügen…          🎤 ] │  ← Daumenzone
@@ -362,7 +364,7 @@ Es kann gefahrlos erneut laufen. Bis die Domains verknüpft sind, nutzen alle Sk
 - Haushalt anlegen, per Einladungslink und Geräte-Token beitreten.
 - Testkonfiguration als Seed: Listen, Geschäfte mit Priorität, Warengruppen.
 - Hinzufügen mit Autocomplete und Verfügbarkeits-Chips.
-- Store-Tabs mit stabiler Sortierung, Ansichtsumschalter und listenübergreifenden Gruppen.
+- Store-Tabs mit stabiler Sortierung, Ansichtsumschalter und listenübergreifender Ansicht.
 - „Nicht hier erhältlich“, „Einkauf abschließen“, Sync-Status.
 
 **Phase 3 – Komfort** ✓
