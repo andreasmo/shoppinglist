@@ -8,7 +8,7 @@ Invoke-Deploy {
   Assert-Command bunny
   $cfg = Read-Config
   Assert-Login
-  if (-not ($cfg.APP_DOMAIN -and $cfg.API_DOMAIN)) { throw 'Erst APP_DOMAIN und API_DOMAIN in deploy/config.env eintragen.' }
+  if (-not ($cfg.APP_DOMAIN -and $cfg.API_DOMAIN)) { throw 'Erst APP_DOMAIN und API_DOMAIN in deploy/config.local.env eintragen.' }
 
   $urls = Resolve-Urls $cfg
   Write-Cnames $cfg $urls

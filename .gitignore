@@ -6,6 +6,10 @@ app/dist/
 .env
 .env.*
 .bunny/
+deploy/config.local.env
+
+# Persönliche Daten (z. B. eigene Import-Dateien)
+import/
 
 # Lokale Entwicklungs-Datenbank
 *.db

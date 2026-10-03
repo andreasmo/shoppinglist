@@ -27,7 +27,7 @@ function Invoke-Tool {
   if ($LASTEXITCODE) { throw "'$name $($rest -join ' ')' ist fehlgeschlagen (Exit-Code $LASTEXITCODE)." }
 }
 
-# Bunny-CLI immer mit dem Profil aus deploy/config.env (die CLI kennt dafür keine Umgebungsvariable).
+# Bunny-CLI immer mit dem Profil aus der Deploy-Konfiguration (die CLI kennt dafür keine Umgebungsvariable).
 function Invoke-Bunny {
   & bunny @args --profile $script:BunnyProfile
   if ($LASTEXITCODE) { throw "'bunny $($args -join ' ')' ist fehlgeschlagen (Exit-Code $LASTEXITCODE, Profil '$script:BunnyProfile')." }
@@ -108,10 +108,13 @@ function Get-SetupCode {
   [pscustomobject]@{ Code = $code; New = $true }
 }
 
+# deploy/config.env (im Repo) plus deploy/config.local.env (eigene Werte, nicht im Repo).
 function Read-Config {
   $path = Join-Path $Root 'deploy/config.env'
   if (-not (Test-Path -LiteralPath $path)) { throw 'deploy/config.env fehlt.' }
   $cfg = Read-EnvFile $path
+  $local = Read-EnvFile (Join-Path $Root 'deploy/config.local.env')
+  foreach ($k in $local.Keys) { $cfg[$k] = $local[$k] }
   foreach ($k in 'BUNNY_PROFILE', 'DB_NAME', 'DB_PRIMARY_REGION', 'SCRIPT_NAME', 'SITE_NAME', 'SITE_REGION', 'APP_DOMAIN', 'API_DOMAIN') {
     if (-not $cfg.ContainsKey($k)) { $cfg[$k] = '' }
   }
@@ -125,7 +128,7 @@ function Get-BcdnHost([string]$Text) {
   if ($m.Success) { $m.Value } else { '' }
 }
 
-# Kommt die Domain als eigener Eintrag vor? (api.einkauf.example.com zählt nicht als einkauf.example.com)
+# Kommt die Domain als eigener Eintrag vor? (api.example.com zählt nicht als example.com)
 function Test-HasDomain([string]$Text, [string]$Domain) {
   $Text -match ('(^|[^a-z0-9.-])' + [regex]::Escape($Domain) + '([^a-z0-9.-]|$)')
 }

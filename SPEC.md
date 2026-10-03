@@ -12,7 +12,7 @@ Stand: 2026-10-03
 | E4 | Store-Ansicht **umschaltbar**: „Alles hier“ ↔ „Nur für hier“ |
 | E5 | **Listenübergreifende Store-Ansicht** gehört ins MVP |
 | E6 | **Höchste Priorität:** übersichtliche, ansprechende Mobile-Ansicht und volle Offline-Fähigkeit |
-| E7 | **Domain:** App unter `einkauf.example.com`, API unter `api.einkauf.example.com` |
+| E7 | **Domain:** App und API unter je einer eigenen (Sub-)Domain, z. B. `einkauf.example.com` und `api.einkauf.example.com` |
 | E8 | **UI-Richtung:** Prototyp A („Ruhig“) mit kompakten Zeilen; der Schalter „Erledigte“ sitzt direkt neben dem Ansichtsumschalter |
 | E9 | **Sync alle 300 s** (im Einkaufsmodus alle 30 s), solange die App sichtbar ist, und sofort beim Öffnen. Eigene Änderungen gehen nach 1,5 s raus. Dazu kommen **Runterziehen zum Synchronisieren** und „Jetzt synchronisieren“ im ⋮-Menü |
 | E10 | **Long-Press auf einen Eintrag** öffnet ein Bearbeiten-Menü (Menge, Notiz, Gibt’s bei, Warengruppe, Liste, entfernen) |
@@ -317,8 +317,8 @@ shoppinglist/
 
 **Einmalig**
 1. Voraussetzungen installieren: Bunny CLI ab 0.18, **Deno 2**, Node 24, PowerShell 7 (die Skripte laufen unter Windows und ebenso in einer Linux-CI).
-2. `bunny login --profile <name>`. Das Profil steht als `BUNNY_PROFILE` in `deploy/config.env` und wird an jeden Bunny-Aufruf angehängt. Achtung: Ein gesetztes `BUNNYNET_API_KEY` hätte Vorrang, die Skripte warnen dann.
-3. Namen und Region in [deploy/config.env](deploy/config.env) prüfen.
+2. `bunny login --profile <name>`. Das Profil steht als `BUNNY_PROFILE` in der Deploy-Konfiguration und wird an jeden Bunny-Aufruf angehängt. Achtung: Ein gesetztes `BUNNYNET_API_KEY` hätte Vorrang, die Skripte warnen dann.
+3. Namen und Region in [deploy/config.env](deploy/config.env) prüfen. Eigene Werte (Profil, Domains) kommen nach `deploy/config.local.env` (nicht im Repo) und überschreiben die Vorgaben.
 4. `.\deploy\setup.ps1` ausführen. Das Skript:
    - legt die DB an; der Token landet in `.env`
    - legt das Edge Script an und hinterlegt den DB-Zugang als Secret
@@ -334,7 +334,7 @@ shoppinglist/
 - PWA: `bunny sites deployments publish --previous` (jeder Deploy bleibt unverändert erhalten).
 - API: `bunny scripts deployments publish <id>`.
 
-**Domain** (`einkauf.example.com` und `api.einkauf.example.com`, steht in `deploy/config.env`):
+**Domain** (`APP_DOMAIN` und `API_DOMAIN` in `deploy/config.local.env`):
 1. Nach `setup.ps1` die beiden ausgegebenen CNAME-Einträge beim DNS-Anbieter anlegen.
 2. `.\deploy\domains.ps1` ausführen. Das Skript:
    - verknüpft die Domains und wartet bis zu 10 Minuten auf DNS
@@ -349,7 +349,7 @@ Es kann gefahrlos erneut laufen. Bis die Domains verknüpft sind, nutzen alle Sk
 
 ## 9. Umsetzungsplan
 
-**Stand:** Die Phasen 0–3 sind umgesetzt und live unter https://einkauf.example.com. Offen ist Phase 4.
+**Stand:** Die Phasen 0–3 sind umgesetzt und im Einsatz. Offen ist Phase 4.
 
 **Phase 0 – Skelett & Pipeline**
 - `app/`, `server/` und `shared/` anlegen, Bunny-Ressourcen per `setup.ps1` einrichten.
@@ -389,7 +389,7 @@ Es kann gefahrlos erneut laufen. Bis die Domains verknüpft sind, nutzen alle Sk
 
 ## 11. Offene Fragen
 
-1. Sollen die Einträge anderer Listen als eigene Gruppe unten stehen (so umgesetzt) oder direkt in den Laufweg einsortiert werden, mit einem Listen-Chip (Prototyp B)?
+1. ~~Einträge anderer Listen als eigene Gruppe oder im Laufweg?~~ Entschieden: im Laufweg, ohne Listen-Chip (Abschnitt 2.4). Offen bleibt, ob es die Listen überhaupt braucht oder eine Geschäfts-Reihenfolge für den Haushalt reicht.
 2. Sind strukturierte Mengen und Einheiten nötig, oder reicht Freitext (so umgesetzt)?
 3. Warengruppen: vorgegebene Seed-Liste (so umgesetzt) oder komplett selbst gepflegt? Und wer darf den Laufweg pflegen?
 4. Sollen die Daten aus Listonic übernommen werden?
