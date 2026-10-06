@@ -1,6 +1,7 @@
 // Abgleich-Kern ohne DOM-Abhängigkeiten: genutzt von der App (store.ts) und vom
 // Service Worker (Background Sync, wenn die App geschlossen ist).
 import { recordKey, type FieldRow, type Json, type SessionInfo } from "@shared/model.ts";
+import { selectSyncBatch } from "@shared/syncTransport.ts";
 import { api } from "./api.ts";
 import { ldb, type OutboxItem, type StoredRecord } from "./db.ts";
 
@@ -36,7 +37,7 @@ export async function flushFromDb(): Promise<void> {
   if (!session) return;
   let cursor = Number(meta.get("cursor") ?? 0);
   for (let round = 0; round < 20; round++) {
-    const batch = await ldb.outbox.orderBy("ts").limit(BATCH_SIZE).toArray();
+    const batch = selectSyncBatch(await ldb.outbox.orderBy("ts").limit(BATCH_SIZE).toArray());
     const res = await api.sync(session.token, { cursor, mutations: batch.map(toMutation) });
     const keys = [...new Set(res.rows.map(([tbl, rid]) => recordKey(tbl, rid)))];
     const existing = new Map<string, StoredRecord>();

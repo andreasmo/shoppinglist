@@ -31,9 +31,37 @@ export interface AppOptions {
   setupCode?: string;
 }
 
+export const MAX_BODY_BYTES = 512_000;
+
 async function jsonBody(req: Request): Promise<Record<string, unknown>> {
-  const text = await req.text();
-  if (text.length > 512_000) throw new HttpError(413, "Anfrage zu groß");
+  const tooLarge = () => new HttpError(413, "Anfrage zu groß");
+  const length = req.headers.get("content-length");
+  if (length && /^\d+$/.test(length) && Number(length) > MAX_BODY_BYTES) {
+    void req.body?.cancel().catch(() => {});
+    throw tooLarge();
+  }
+  const parts: string[] = [];
+  const reader = req.body?.getReader();
+  if (reader) {
+    const decoder = new TextDecoder();
+    let bytes = 0;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > MAX_BODY_BYTES) {
+          void reader.cancel().catch(() => {});
+          throw tooLarge();
+        }
+        parts.push(decoder.decode(value, { stream: true }));
+      }
+      parts.push(decoder.decode());
+    } finally {
+      reader.releaseLock();
+    }
+  }
+  const text = parts.join("");
   try {
     const body = JSON.parse(text || "{}");
     if (body && typeof body === "object" && !Array.isArray(body)) return body;
@@ -46,6 +74,16 @@ async function jsonBody(req: Request): Promise<Record<string, unknown>> {
 export function createApp({ db, allowedOrigins, setupCode }: AppOptions) {
   const app = new Hono<Env>();
   const setupHash = setupCode ? sha256(normalizeCode(setupCode)) : null;
+
+  app.use("/api/*", async (c, next) => {
+    c.header("Cache-Control", "no-store");
+    c.header("X-Content-Type-Options", "nosniff");
+    c.header("X-Frame-Options", "DENY");
+    c.header("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'");
+    c.header("Referrer-Policy", "no-referrer");
+    if (new URL(c.req.url).protocol === "https:") c.header("Strict-Transport-Security", "max-age=31536000");
+    await next();
+  });
 
   const checkSetupCode = async (given: unknown) => {
     if (setupCode === undefined) return;
@@ -75,7 +113,11 @@ export function createApp({ db, allowedOrigins, setupCode }: AppOptions) {
   app.post("/api/households", async (c) => {
     const body = await jsonBody(c.req.raw);
     await checkSetupCode(body.setupCode);
-    const session = await createHousehold(db, cleanName(body.householdName ?? "Zuhause", "Haushalt"), cleanName(body.memberName, "Name"));
+    const session = await createHousehold(
+      db,
+      cleanName(body.householdName ?? "Zuhause", "Haushalt"),
+      cleanName(body.memberName, "Name"),
+    );
     return c.json(session, 201);
   });
 

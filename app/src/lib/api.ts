@@ -1,4 +1,5 @@
 import type { SessionInfo, SyncRequest, SyncResponse } from "@shared/model.ts";
+import { exchangeSync } from "@shared/syncTransport.ts";
 
 const BASE = (import.meta.env.VITE_API_URL ?? "").replace(/\/$/, "");
 
@@ -31,7 +32,7 @@ async function call<T>(path: string, opts: { body?: unknown; token?: string; tim
     clearTimeout(timer);
   }
   // Gateway/Server vorübergehend nicht erreichbar: wie offline behandeln und später erneut versuchen.
-  if (res.status === 502 || res.status === 503 || res.status === 504) throw new OfflineError(`Server nicht erreichbar (${res.status})`);
+  if (res.status === 429 || res.status === 502 || res.status === 503 || res.status === 504) throw new OfflineError(`Server vorübergehend nicht erreichbar (${res.status})`);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(res.status, (data as { error?: string }).error ?? `Fehler ${res.status}`);
   return data as T;
@@ -46,5 +47,6 @@ export const api = {
   rename: (token: string, name: string) => call<{ ok: boolean; name: string }>("/api/me", { body: { name }, token }),
   revoke: (token: string, memberId: string) =>
     call<{ ok: boolean }>(`/api/members/${encodeURIComponent(memberId)}/revoke`, { body: {}, token }),
-  sync: (token: string, req: SyncRequest) => call<SyncResponse>("/api/sync", { body: req, token, timeoutMs: 25_000 }),
+  sync: (token: string, req: SyncRequest) =>
+    exchangeSync(req, (packet) => call<SyncResponse>("/api/sync", { body: packet, token, timeoutMs: 25_000 })),
 };

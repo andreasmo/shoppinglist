@@ -24,13 +24,14 @@ function Invoke-Deploy([scriptblock]$Body) {
 function Invoke-Tool {
   $name, $rest = $args
   & $name @rest
-  if ($LASTEXITCODE) { throw "'$name $($rest -join ' ')' ist fehlgeschlagen (Exit-Code $LASTEXITCODE)." }
+  if ($LASTEXITCODE) { throw "'$name' ist fehlgeschlagen (Exit-Code $LASTEXITCODE)." }
 }
 
 # Bunny-CLI immer mit dem Profil aus der Deploy-Konfiguration (die CLI kennt dafür keine Umgebungsvariable).
 function Invoke-Bunny {
   & bunny @args --profile $script:BunnyProfile
-  if ($LASTEXITCODE) { throw "'bunny $($args -join ' ')' ist fehlgeschlagen (Exit-Code $LASTEXITCODE, Profil '$script:BunnyProfile')." }
+  # Argumente können Secrets enthalten, etwa bei 'scripts env set ... --secret'.
+  if ($LASTEXITCODE) { throw "'bunny' ist fehlgeschlagen (Exit-Code $LASTEXITCODE, Profil '$script:BunnyProfile')." }
 }
 
 # Wie Invoke-Bunny, liefert aber die Ausgabe als Text und schluckt Fehler (leerer Text).

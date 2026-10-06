@@ -201,7 +201,7 @@ Löschen = Feld _deleted
 ```
 
 **Entscheidungen**
-- **Last-Write-Wins pro Feld macht die Datenbank selbst:** Der Upsert schreibt nur, wenn `(ts, mid)` neuer ist als der gespeicherte Stand. Das ist idempotent, braucht keine Transaktion über mehrere Requests und keine Tabelle für schon verarbeitete Mutationen.
+- **Last-Write-Wins pro Feld macht die Datenbank selbst:** Der Upsert schreibt nur, wenn `(ts, mid)` neuer ist als der gespeicherte Stand. `mutation_timestamps` speichert den beim ersten Empfang vergebenen Zeitstempel je `(household_id, mid)` dauerhaft. Dadurch bleiben auch gekappte Zeitstempel bei Retries stabil, ohne Transaktionen über mehrere Requests.
 - **Entry-ID = Product-ID:** Ein Artikel kann nur einmal offen auf der Liste stehen. Fügen zwei Personen gleichzeitig „Milch“ hinzu, entsteht kein Duplikat.
 - **Product-ID wird aus dem normalisierten Namen abgeleitet:** Legen zwei Geräte offline „Milch“ an, wird daraus derselbe Artikel.
 - **Store-Ansichten werden komplett im Client abgeleitet.**
@@ -265,19 +265,21 @@ Export und Import unter ⋮ → Einstellungen → „Daten sichern & wiederherst
 - **Client:** IndexedDB hält den bestätigten Server-Stand und eine **Outbox** mit eigenen Änderungen. Die UI zeigt immer beides übereinander.
 - **Mutation:** `{ mid (UUID), tbl, rid, fields{…}, ts }`. `ts` steigt pro Gerät monoton, `mid` entscheidet bei Gleichstand.
 - **`POST /api/sync`** erledigt Push und Pull in **einem atomaren Batch, also einem Request**:
+  - Den effektiven Zeitstempel pro Mutations-ID einmal in `mutation_timestamps` reservieren, ebenfalls im selben Batch.
   - Für jedes Feld `UPDATE households SET rev = rev + 1` und einen Upsert mit Bedingung `excluded.ts > ts OR (= AND excluded.mid > mid)`.
   - Als letzte Anweisung im selben Batch: alle Felder mit `rev > cursor` (höchstens 1000, dann `hasMore`).
-  - Was der Server bestätigt hat, fliegt aus der Outbox.
-- **Schutz:** Zeitstempel höchstens 60 s in der Zukunft (falsch gehende Handy-Uhren), strenge Prüfung von Tabelle, Feldnamen und Größen, `member` nur serverseitig.
+  - Der Client sendet Pakete mit höchstens 200 Mutationen und 240.000 UTF-8-Bytes einschließlich JSON. Auch große Einzelmutationen können bei unveränderter ID auf mehrere Pakete verteilt werden. Erst nach Bestätigung aller Teilpakete wird die ursprüngliche Outbox bestätigt.
+- **Schutz:** Zeitstempel höchstens 60 s in der Zukunft (falsch gehende Handy-Uhren), strenge Prüfung von Tabelle, Feldnamen und Größen, `member` nur serverseitig. Das Backend bricht Bodies über 512.000 Bytes bereits beim Einlesen ab. API-Antworten erhalten `Cache-Control: no-store`.
 - **Polling alle 300 s, im Einkaufsmodus alle 30 s, dazu sofort beim Öffnen und beim Runterziehen:** Edge Scripts haben keinen Broadcast zwischen Instanzen. Eine Abfrage kostet etwa 80 ms.
-- **Fehlerverhalten:** Keine Verbindung oder 502/503/504 gilt als „Offline“, die Outbox bleibt erhalten. Bei 401 meldet die App, dass das Gerät abgemeldet ist.
+- **Fehlerverhalten:** Keine Verbindung oder 429/502/503/504 gilt als vorübergehend „Offline“, die Outbox bleibt erhalten. Kleine Outbox-Portionen werden schrittweise bestätigt, damit Rate-Limits große Importe nicht von vorne beginnen lassen. Bei 401 meldet die App, dass das Gerät abgemeldet ist.
 
 ### 7.3 Zugang
 - **Neuen Haushalt anlegen** geht nur mit dem **Einrichtungscode** (Secret `SETUP_CODE` im Edge Script). `deploy.ps1` erzeugt ihn beim ersten Deploy zufällig und legt ihn in `.env` ab. Ohne gesetztes Secret ist das Anlegen gesperrt.
 - **Alle anderen** treten per **Einladungslink** bei (⋮ → „Mitglied einladen“, 7 Tage gültig, mehrfach nutzbar, teilbar z. B. per WhatsApp).
 - **Danach bleibt das Gerät angemeldet:** Es bekommt einen zufälligen Geräte-Schlüssel (wirkt wie ein dauerhaftes Cookie), in der DB liegt nur der Hash.
 - **Mehrere Haushalte** sind möglich und strikt getrennt.
-- Später: Geräte in den Einstellungen widerrufen, optional Login per E-Mail-Link (bräuchte einen Mail-Dienst).
+- **Geräte entfernen:** widerruft das Geräte-Token und alle noch offenen Einladungen des Haushalts atomar. Beitreten prüft die Einladung in derselben Schreibtransaktion wie das Anlegen des Geräts. Verbleibende Mitglieder können neue Einladungen erstellen.
+- Später: optional Login per E-Mail-Link (bräuchte einen Mail-Dienst).
 
 ### 7.4 Stack
 - **Frontend** (Node 24/npm): React 19 + TypeScript 7 + Vite 8, `vite-plugin-pwa`, Dexie, Schrift Figtree (selbst gehostet, also offline verfügbar).
@@ -330,6 +332,7 @@ shoppinglist/
 1. `bunny db migrations apply --dir server/migrations`. Migrationen sind nur additiv, damit ältere App-Versionen auf den Handys weiterlaufen.
 2. Die API wird gebündelt (esbuild + Deno-Loader, wie in Bunnys Template). `ALLOWED_ORIGINS` und `SETUP_CODE` werden gesetzt, beim ersten Mal wird der Code erzeugt und in `.env` abgelegt. Danach folgt `bunny scripts deploy`.
 3. Die PWA wird mit `VITE_API_URL` gebaut und mit `bunny sites deploy --spa` hochgeladen.
+4. `deploy/security.ps1` erzwingt HTTPS (auch auf Bunny-Hostnamen), deaktiviert TLS 1.0/1.1 und setzt Sicherheitsheader. Shield wird ausdrücklich mit **Basic**, allgemeinem WAF im Blockiermodus und DDoS-Schutz eingerichtet. Pro IP/10 Sekunden gelten 5 Beitritts-/Einrichtungsversuche, 100 API-Anfragen und 300 App-Anfragen (Basic unterstützt keine längeren Fenster). Größere Bodies älterer PWAs werden am 256-KB-Prüflimit nur protokolliert; das Backend begrenzt sie weiterhin. Keine Request-Bodies oder Auth-Header in Shield-Logs. Tarifdetails und Nur-Lesen-Prüfung: [README](README.md#auf-bunnynet-so-ist-es-gedacht).
 
 **Rollback**
 - PWA: `bunny sites deployments publish --previous` (jeder Deploy bleibt unverändert erhalten).

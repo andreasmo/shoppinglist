@@ -20,16 +20,35 @@ export const PULL_LIMIT = 1000;
 const MAX_CLOCK_SKEW_MS = 60_000;
 
 /** Ein Feld schreiben, falls (ts, mid) neuer ist als der gespeicherte Stand. Vergibt eine neue rev. */
-export function upsertField(householdId: string, tbl: Tbl, rid: string, field: string, value: Json, ts: number, mid: string): Stmt[] {
+export function upsertField(
+  householdId: string,
+  tbl: Tbl,
+  rid: string,
+  field: string,
+  value: Json,
+  ts: number,
+  mid: string,
+  recordedTimestamp = false,
+): Stmt[] {
+  const timestamp = recordedTimestamp ? "(SELECT ts FROM mutation_timestamps WHERE household_id = ? AND mid = ?)" : "?";
   return [
     { sql: "UPDATE households SET rev = rev + 1 WHERE id = ?", args: [householdId] },
     {
       sql: `INSERT INTO fields (household_id, tbl, rid, field, value, ts, mid, rev)
-            VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT rev FROM households WHERE id = ?))
+            VALUES (?, ?, ?, ?, ?, ${timestamp}, ?, (SELECT rev FROM households WHERE id = ?))
             ON CONFLICT (household_id, tbl, rid, field) DO UPDATE
               SET value = excluded.value, ts = excluded.ts, mid = excluded.mid, rev = excluded.rev
               WHERE excluded.ts > fields.ts OR (excluded.ts = fields.ts AND excluded.mid > fields.mid)`,
-      args: [householdId, tbl, rid, field, JSON.stringify(value), ts, mid, householdId],
+      args: [
+        householdId,
+        tbl,
+        rid,
+        field,
+        JSON.stringify(value),
+        ...(recordedTimestamp ? [householdId, mid] : [ts]),
+        mid,
+        householdId,
+      ],
     },
   ];
 }
@@ -46,7 +65,15 @@ export async function sync(db: Db, householdId: string, req: SyncRequest): Promi
   const stmts: Stmt[] = [];
   for (const m of req.mutations) {
     const ts = Math.min(m.ts, now + MAX_CLOCK_SKEW_MS);
-    for (const [field, value] of Object.entries(m.fields)) stmts.push(...upsertField(householdId, m.tbl, m.rid, field, value, ts, m.mid));
+    // Im selben Schreib-Batch reservieren: parallele Retries und aufgeteilte Pakete
+    // einer Mutation verwenden immer denselben (gegebenenfalls gekappten) Zeitstempel.
+    stmts.push({
+      sql: "INSERT INTO mutation_timestamps (household_id, mid, ts) VALUES (?, ?, ?) ON CONFLICT DO NOTHING",
+      args: [householdId, m.mid, ts],
+    });
+    for (const [field, value] of Object.entries(m.fields)) {
+      stmts.push(...upsertField(householdId, m.tbl, m.rid, field, value, ts, m.mid, true));
+    }
   }
   stmts.push(pullStmt(householdId, req.cursor));
   const results = await db.batch(stmts);
@@ -66,7 +93,7 @@ export function parseSyncRequest(body: unknown): SyncRequest {
   };
   if (!body || typeof body !== "object") bad("kein Objekt");
   const { cursor, mutations } = body as Record<string, unknown>;
-  if (typeof cursor !== "number" || !Number.isInteger(cursor) || cursor < 0) bad("cursor");
+  if (typeof cursor !== "number" || !Number.isSafeInteger(cursor) || cursor < 0) bad("cursor");
   if (!Array.isArray(mutations) || mutations.length > MAX_MUTATIONS) bad("mutations");
   const out: Mutation[] = [];
   for (const raw of mutations as unknown[]) {
@@ -83,7 +110,13 @@ export function parseSyncRequest(body: unknown): SyncRequest {
       if (!FIELD_NAME_RE.test(k)) bad(`Feldname ${k}`);
       if (JSON.stringify(v ?? null).length > MAX_FIELD_JSON) bad(`Feld ${k} zu groß`);
     }
-    out.push({ mid: mid as string, tbl: tbl as Tbl, rid: rid as string, fields: fields as Record<string, Json>, ts: Math.floor(ts as number) });
+    out.push({
+      mid: mid as string,
+      tbl: tbl as Tbl,
+      rid: rid as string,
+      fields: fields as Record<string, Json>,
+      ts: Math.floor(ts as number),
+    });
   }
   return { cursor: cursor as number, mutations: out };
 }

@@ -60,7 +60,10 @@ export async function createHousehold(db: Db, householdName: string, memberName:
     }
   }
   await db.batch([
-    { sql: "INSERT INTO households (id, name, rev, created_at) VALUES (?, ?, ?, ?)", args: [householdId, householdName, rev, now] },
+    {
+      sql: "INSERT INTO households (id, name, rev, created_at) VALUES (?, ?, ?, ?)",
+      args: [householdId, householdName, rev, now],
+    },
     {
       sql: "INSERT INTO members (id, household_id, name, token_hash, created_at) VALUES (?, ?, ?, ?, ?)",
       args: [memberId, householdId, memberName, await sha256(token), now],
@@ -73,34 +76,56 @@ export async function createHousehold(db: Db, householdName: string, memberName:
 export async function createInvite(db: Db, member: AuthedMember): Promise<{ code: string; expiresAt: number }> {
   const code = randomCode();
   const expiresAt = Date.now() + INVITE_TTL_MS;
-  await db.execute("INSERT INTO invites (code_hash, household_id, created_by, expires_at) VALUES (?, ?, ?, ?)", [
-    await sha256(code),
-    member.householdId,
-    member.memberId,
-    expiresAt,
-  ]);
+  const created = await db.execute(
+    `INSERT INTO invites (code_hash, household_id, created_by, expires_at)
+    SELECT ?, household_id, id, ? FROM members WHERE id = ? AND household_id = ? AND revoked_at IS NULL
+    RETURNING code_hash`,
+    [
+      await sha256(code),
+      expiresAt,
+      member.memberId,
+      member.householdId,
+    ],
+  );
+  if (!created.length) throw new HttpError(401, "Gerät ist nicht (mehr) angemeldet");
   return { code, expiresAt };
 }
 
 export async function joinHousehold(db: Db, code: string, memberName: string): Promise<SessionInfo> {
-  const rows = await db.execute(
-    `SELECT h.id, h.name FROM invites i JOIN households h ON h.id = i.household_id
-     WHERE i.code_hash = ? AND i.expires_at > ?`,
-    [await sha256(normalizeCode(code)), Date.now()],
-  );
+  const memberId = crypto.randomUUID();
+  const token = randomToken();
+  const tokenHash = await sha256(token);
+  const codeHash = await sha256(normalizeCode(code));
+  const now = Date.now();
+  // Einladung erst in der Schreib-Transaktion prüfen. Ein gleichzeitiges Entfernen
+  // darf keine zuvor gelesene, inzwischen widerrufene Einladung durchlassen.
+  const results = await db.batch([
+    {
+      sql: `INSERT INTO members (id, household_id, name, token_hash, created_at)
+        SELECT ?, i.household_id, ?, ?, ? FROM invites i
+        JOIN members creator ON creator.id = i.created_by AND creator.household_id = i.household_id
+        WHERE i.code_hash = ? AND i.expires_at > ? AND creator.revoked_at IS NULL`,
+      args: [memberId, memberName, tokenHash, now, codeHash, now],
+    },
+    {
+      sql: "UPDATE households SET rev = rev + 1 WHERE id = (SELECT household_id FROM members WHERE id = ?)",
+      args: [memberId],
+    },
+    {
+      sql: `INSERT INTO fields (household_id, tbl, rid, field, value, ts, mid, rev)
+        SELECT m.household_id, 'member', m.id, 'name', ?, ?, 'server', h.rev
+        FROM members m JOIN households h ON h.id = m.household_id WHERE m.id = ?`,
+      args: [JSON.stringify(memberName), now, memberId],
+    },
+    {
+      sql: "SELECT h.id, h.name FROM members m JOIN households h ON h.id = m.household_id WHERE m.id = ?",
+      args: [memberId],
+    },
+  ]);
+  const rows = results[results.length - 1];
   if (!rows.length) throw new HttpError(404, "Einladung unbekannt oder abgelaufen");
   const householdId = String(rows[0].id);
   const householdName = String(rows[0].name);
-  const memberId = crypto.randomUUID();
-  const token = randomToken();
-  const now = Date.now();
-  await db.batch([
-    {
-      sql: "INSERT INTO members (id, household_id, name, token_hash, created_at) VALUES (?, ?, ?, ?, ?)",
-      args: [memberId, householdId, memberName, await sha256(token), now],
-    },
-    ...upsertField(householdId, "member", memberId, "name", memberName, now, "server"),
-  ]);
   return { token, memberId, memberName, householdId, householdName };
 }
 
@@ -121,6 +146,8 @@ export async function revokeMember(db: Db, me: AuthedMember, memberId: string): 
   const now = Date.now();
   await db.batch([
     { sql: "UPDATE members SET revoked_at = ? WHERE id = ?", args: [now, memberId] },
+    // Auch der ursprüngliche Beitrittslink könnte auf dem entfernten Gerät liegen.
+    { sql: "DELETE FROM invites WHERE household_id = ?", args: [me.householdId] },
     ...upsertField(me.householdId, "member", memberId, "revoked", true, now, "server"),
   ]);
 }

@@ -1,9 +1,9 @@
 # Baut und deployt: DB-Migrationen → API (Edge Script) → PWA (Site).
 #   .\deploy\deploy.ps1            alles, in dieser Reihenfolge
-#   .\deploy\deploy.ps1 api web    nur einzelne Schritte (db | api | web)
+#   .\deploy\deploy.ps1 api web    nur einzelne Schritte (db | api | web | security)
 param(
   [Parameter(ValueFromRemainingArguments = $true)]
-  [ValidateSet('db', 'api', 'web')]
+  [ValidateSet('db', 'api', 'web', 'security')]
   [string[]]$Steps = @('db', 'api', 'web')
 )
 . "$PSScriptRoot/lib.ps1"
@@ -13,14 +13,21 @@ Invoke-Deploy {
   $cfg = Read-Config
   Assert-Login
   $urls = Resolve-Urls $cfg
+  $migrationsApplied = $false
 
   foreach ($step in $Steps) {
     switch ($step) {
       'db' {
         Write-Step 'DB-Migrationen (server/migrations)'
         Invoke-Bunny db migrations apply --dir server/migrations --force
+        $migrationsApplied = $true
       }
       'api' {
+        if (-not $migrationsApplied) {
+          Write-Step 'DB-Migrationen vor dem API-Deploy'
+          Invoke-Bunny db migrations apply --dir server/migrations --force
+          $migrationsApplied = $true
+        }
         $deno = Resolve-Deno
         Write-Step 'API bündeln'
         Invoke-Tool $deno run -A deploy/build-api.ts
@@ -29,7 +36,7 @@ Invoke-Deploy {
         $setup = Get-SetupCode
         Invoke-Bunny scripts env set SETUP_CODE $setup.Code --secret
         if ($setup.New) {
-          Write-Host "Neuer Einrichtungscode für 'Neuen Haushalt anlegen': $($setup.Code) (steht auch in .env)" -ForegroundColor Yellow
+          Write-Host "Neuer Einrichtungscode für 'Neuen Haushalt anlegen' steht in der lokalen .env." -ForegroundColor Yellow
         }
         Invoke-Bunny scripts deploy dist/api/index.js
       }
@@ -48,6 +55,11 @@ Invoke-Deploy {
         Invoke-Bunny sites deploy app/dist --site $cfg.SITE_NAME --spa
       }
     }
+  }
+
+  if ($Steps -contains 'api' -or $Steps -contains 'web' -or $Steps -contains 'security') {
+    & "$PSScriptRoot/security.ps1"
+    if ($LASTEXITCODE) { throw 'Bunny-Absicherung fehlgeschlagen.' }
   }
 
   Write-Step "Live: $($urls.AppUrl)"

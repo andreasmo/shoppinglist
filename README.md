@@ -69,6 +69,33 @@ Die PWA liegt auf Bunny Sites, die API läuft als Edge Script, die Daten liegen 
 4. `./deploy/deploy.ps1` spielt Migrationen, API und PWA aus. Beim ersten Mal wird ein **Einrichtungscode** erzeugt und in `.env` abgelegt. Nur damit lassen sich neue Haushalte anlegen, alle anderen treten per Einladung bei.
 5. Optional eine eigene Domain: `APP_DOMAIN`/`API_DOMAIN` setzen, CNAMEs anlegen, `./deploy/domains.ps1` ausführen.
 
+API-/Web-Deploys wenden anschließend `deploy/security.ps1` an. Das erzwingt HTTPS auf allen
+Projekt-Hostnamen, deaktiviert TLS 1.0/1.1 und setzt Sicherheitsheader einschließlich CSP und HSTS.
+Die API wird nicht gecacht; der Service Worker wird bei Updates neu validiert.
+
+**Bunny Shield:** Das Skript wählt ausdrücklich **Basic**, aktiviert das allgemeine WAF-Profil im
+Blockiermodus und DDoS-Schutz. Es richtet pro IP 5 Beitritts-/Einrichtungsversuche, 100 API-Anfragen
+und 300 App-Anfragen pro 10 Sekunden ein (Basic erlaubt keine längeren Zeitfenster). Bei Überschreitung
+gilt eine Sperre für 30 Sekunden; die App behält ungesendete Änderungen für einen späteren Versuch.
+Keine kostenpflichtigen Zusatzmodule oder automatischen
+Tarifwechsel. Basic hat keine Grundgebühr und enthält 25 Mio. Requests pro Monat; darüber berechnet
+Bunny derzeit $0,70 pro Million ([Tarife](https://bunny.net/shield/)).
+
+```powershell
+./deploy/security.ps1 -Check  # Einstellungen nur lesen
+./deploy/security.ps1         # Absicherung erneut anwenden
+```
+
+Neue Clients teilen Sync-Anfragen einschließlich UTF-8/JSON in Pakete unter 240 KB auf. Damit
+liegen sie unter dem 256-KB-Prüflimit von Shield Basic. Für ältere installierte PWAs blockiert
+Shield größere Bodies nicht allein wegen dieses Prüflimits; das Backend erzwingt beim Einlesen
+weiterhin maximal 512.000 Bytes. Header-/Body-Logging in Shield bleibt ausgeschaltet.
+
+Beim Entfernen eines Geräts werden alle bisherigen Einladungen seines Haushalts ungültig.
+Verbleibende Geräte können danach neue Einladungen erstellen. Einmal vergebene Sync-Zeitstempel
+werden in `mutation_timestamps` dauerhaft gespeichert, damit auch späte Wiederholungen verlorener
+Anfragen keine neueren Änderungen überschreiben.
+
 Details stehen in [SPEC.md, Abschnitt 8](SPEC.md#8-deployment-bunny-cli).
 
 ### Selbst gehostet

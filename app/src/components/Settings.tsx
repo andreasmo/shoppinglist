@@ -484,7 +484,7 @@ function MembersPage({ nav, onInvite }: { nav: Nav; onInvite: () => void }) {
                 className="secondary-btn"
                 style={{ minHeight: 40, padding: "0 12px", fontSize: 14 }}
                 disabled={busy}
-                onClick={() => confirm(`„${m.name}“ entfernen? Das Gerät ist danach abgemeldet.`) && void run(() => removeMember(m.id), `${m.name} entfernt`)}
+                onClick={() => confirm(`„${m.name}“ entfernen? Das Gerät ist danach abgemeldet. Bisherige Einladungslinks werden ungültig.`) && void run(() => removeMember(m.id), `${m.name} entfernt`)}
               >
                 Entfernen
               </button>

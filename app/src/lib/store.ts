@@ -7,10 +7,11 @@
 // Ein Sync schickt die Outbox und holt im selben Request alle Änderungen seit dem Cursor.
 // Was der Server bestätigt hat, fliegt aus der Outbox; alles andere bleibt obendrauf liegen.
 import { buildSnapshot, emptySnapshot, recordKey, type FieldRow, type RawRecord, type RecordData, type SessionInfo, type Snapshot, type Tbl } from "@shared/model.ts";
+import { selectSyncBatch } from "@shared/syncTransport.ts";
 import { useSyncExternalStore } from "react";
 import { api, ApiError, OfflineError } from "./api.ts";
 import { ldb, type OutboxItem, type StoredRecord } from "./db.ts";
-import { BACKGROUND_SYNC_TAG, BATCH_SIZE, mergeRows, toMutation } from "./syncCore.ts";
+import { BACKGROUND_SYNC_TAG, mergeRows, toMutation } from "./syncCore.ts";
 
 export type SyncStatus = "idle" | "syncing" | "offline" | "error";
 
@@ -193,12 +194,14 @@ class AppStore {
 
   private async runSync(): Promise<boolean> {
     const session = this.session!;
+    let attempted: OutboxItem[] = [];
     this.lastAttemptAt = Date.now();
     this.status = "syncing";
     this.emit();
     try {
       for (let round = 0; round < 50; round++) {
-        const batch = this.outbox.slice(0, BATCH_SIZE);
+        const batch = selectSyncBatch(this.outbox);
+        attempted = batch;
         const res = await api.sync(session.token, { cursor: this.cursor, mutations: batch.map(toMutation) });
         await this.applyPulled(res.rows, res.cursor, batch.map((b) => b.mid));
         if (!res.hasMore && this.outbox.length === 0) break;
@@ -218,8 +221,9 @@ class AppStore {
         this.lastError = err.message;
       } else if (err instanceof ApiError && err.status === 400) {
         // Der Server lehnt Änderungen ab, die er nie annehmen wird – sonst bliebe die Outbox für immer hängen.
-        const dropped = this.outbox.slice(0, BATCH_SIZE).map((o) => o.mid);
-        this.outbox = this.outbox.slice(dropped.length);
+        const dropped = attempted.map((o) => o.mid);
+        const rejected = new Set(dropped);
+        this.outbox = this.outbox.filter((o) => !rejected.has(o.mid));
         await ldb.outbox.bulkDelete(dropped);
         this.rebuild(false);
         this.status = "error";
