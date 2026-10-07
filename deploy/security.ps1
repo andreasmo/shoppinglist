@@ -7,7 +7,7 @@ param([switch]$Check)
 function Invoke-BunnyApiJson([string]$Method, [string]$Path, $Body = $null) {
   $cliArgs = @('api', $Method, $Path, '--profile', $script:BunnyProfile, '--output', 'json')
   if ($null -ne $Body) { $cliArgs += @('--body', ($Body | ConvertTo-Json -Depth 30 -Compress)) }
-  $raw = (& bunny @cliArgs) -join "`n"
+  $raw = (Invoke-BunnyCli @cliArgs) -join "`n"
   if ($LASTEXITCODE) { throw "Bunny API $Method $Path fehlgeschlagen (Exit-Code $LASTEXITCODE): $raw" }
   if (-not $raw.Trim()) { return $null }
   $result = $raw | ConvertFrom-Json -AsHashtable

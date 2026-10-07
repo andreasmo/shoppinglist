@@ -27,16 +27,33 @@ function Invoke-Tool {
   if ($LASTEXITCODE) { throw "'$name' ist fehlgeschlagen (Exit-Code $LASTEXITCODE)." }
 }
 
+# Startet die Bunny-CLI möglichst direkt über Node. Versionsmanager-Shims (z. B. von nvm-windows)
+# reichen Argumente über cmd.exe weiter; dort trennt '&' in API-Pfaden wie '?page=1&perPage=100'
+# den Befehl auf, und alles danach – auch '--profile' – geht verloren.
+function Invoke-BunnyCli {
+  if (-not (Test-Path variable:script:BunnyCmd)) {
+    $script:BunnyCmd = @('bunny')
+    if ($IsWindows -and (Get-Command npm -ErrorAction SilentlyContinue)) {
+      $npmRoot = (& npm root -g 2>$null) -join ''
+      $global:LASTEXITCODE = 0
+      $cli = if ($npmRoot) { Join-Path $npmRoot.Trim() '@bunny.net/cli/bin/bunny.cjs' }
+      if ($cli -and (Test-Path -LiteralPath $cli)) { $script:BunnyCmd = @('node', $cli) }
+    }
+  }
+  $pre = @($script:BunnyCmd | Select-Object -Skip 1)
+  & $script:BunnyCmd[0] @pre @args
+}
+
 # Bunny-CLI immer mit dem Profil aus der Deploy-Konfiguration (die CLI kennt dafür keine Umgebungsvariable).
 function Invoke-Bunny {
-  & bunny @args --profile $script:BunnyProfile
+  Invoke-BunnyCli @args --profile $script:BunnyProfile
   # Argumente können Secrets enthalten, etwa bei 'scripts env set ... --secret'.
   if ($LASTEXITCODE) { throw "'bunny' ist fehlgeschlagen (Exit-Code $LASTEXITCODE, Profil '$script:BunnyProfile')." }
 }
 
 # Wie Invoke-Bunny, liefert aber die Ausgabe als Text und schluckt Fehler (leerer Text).
 function Get-BunnyOutput {
-  try { $out = (& bunny @args --profile $script:BunnyProfile 2>$null) -join "`n" } catch { $out = '' }
+  try { $out = (Invoke-BunnyCli @args --profile $script:BunnyProfile 2>$null) -join "`n" } catch { $out = '' }
   if ($LASTEXITCODE) { $out = '' }
   $global:LASTEXITCODE = 0
   $out
