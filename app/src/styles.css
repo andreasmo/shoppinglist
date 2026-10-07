@@ -104,9 +104,9 @@ input, textarea { font: inherit; color: inherit; }
 .seg button[aria-pressed="true"] { background: var(--raised); color: var(--ink); box-shadow: 0 1px 3px rgba(17, 20, 24, 0.14); }
 .plan-hint { flex: 1; font-size: 14px; color: var(--muted); }
 .hide-btn { flex: none; min-height: 42px; padding: 0 12px; border-radius: 12px; display: flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; background: var(--soft); }
-.hide-btn[aria-pressed="true"] { background: var(--ink); color: var(--on-ink); }
+.hide-btn:not([data-done="inline"]) { background: var(--ink); color: var(--on-ink); }
 .hide-btn .count { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 800; background: var(--count-bg); color: var(--ink); }
-.hide-btn[aria-pressed="true"] .count { background: var(--on-ink); color: var(--ink); }
+.hide-btn:not([data-done="inline"]) .count { background: var(--on-ink); color: var(--ink); }
 .legend { display: flex; align-items: center; gap: 7px; font-size: 12px; color: var(--muted); }
 .dot { position: relative; width: 8px; height: 8px; border-radius: 4px; flex: none; background: var(--c); }
 .mode-bar { display: flex; align-items: center; gap: 10px; min-height: 40px; padding: 0 6px 0 12px; border-radius: 12px; background: var(--soft); font-size: 14px; font-weight: 600; }
@@ -122,11 +122,12 @@ button.row:active { background: var(--row-active); }
 .check { width: 22px; height: 22px; border-radius: 11px; flex: none; display: flex; align-items: center; justify-content: center; border: 2px solid var(--ring); color: #fff; transition: background-color 0.15s, border-color 0.15s; }
 .row[aria-pressed="true"] .check { background: var(--faint); border-color: var(--faint); }
 .row-main { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; }
-.row-name { min-width: 0; font-size: 16px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-name { min-width: 0; font-size: 17px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row[aria-pressed="true"] .row-name { color: var(--done); text-decoration: line-through; }
-.row-note { flex: 1 1 0; min-width: 0; font-size: 13px; color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.row-by { flex: none; font-size: 12px; color: var(--muted-2); }
-.row-qty { flex: none; font-size: 14px; color: var(--muted); }
+.row-note { flex: 1 1 0; min-width: 0; font-size: 14px; color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.row-by { flex: none; font-size: 13px; color: var(--muted-2); }
+.row-qty { flex: none; font-size: 15px; color: var(--muted); }
+.done-section { margin-top: 14px; border-top: 1px solid var(--line); }
 .box { margin: 10px 12px 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
 .box + .box { margin-top: 8px; }
 .box-head { width: 100%; min-height: 44px; display: flex; align-items: center; gap: 10px; padding: 0 12px; font-size: 15px; font-weight: 700; }
@@ -153,9 +154,9 @@ button.row:active { background: var(--row-active); }
 
 /* Einkaufsmodus: größere Trefferflächen */
 .app.shopping .row { min-height: 54px; gap: 14px; }
-.app.shopping .row-name { font-size: 18px; }
+.app.shopping .row-name { font-size: 19px; }
 .app.shopping .check { width: 26px; height: 26px; border-radius: 13px; }
-.app.shopping .row-qty { font-size: 16px; }
+.app.shopping .row-qty { font-size: 17px; }
 
 /* Sortieren per Drag & Drop */
 .sortable { position: relative; touch-action: auto; }

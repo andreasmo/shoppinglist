@@ -1,5 +1,5 @@
 // Einstellungen pro Gerät (gewählte Liste, Tab, Ansichtsmodus …). Bewusst nicht synchronisiert.
-import type { Mode } from "@shared/view.ts";
+import type { DoneMode, Mode } from "@shared/view.ts";
 import { useSyncExternalStore } from "react";
 
 export type Theme = "auto" | "light" | "dark";
@@ -12,17 +12,20 @@ export interface Prefs {
   /** Store-ID oder "alle". */
   tab: string;
   modes: Record<string, Mode>;
-  hideDone: boolean;
+  /** Erledigte an ihrem Platz, gesammelt unten oder ausgeblendet. */
+  done: DoneMode;
   /** Auf-/zugeklappte Bereiche („Aus Drogerie“, „Nicht hier erhältlich“). */
   open: Record<string, boolean>;
 }
 
 const KEY = "einkauf.prefs";
-const DEFAULTS: Prefs = { theme: "auto", shopping: false, listId: "", tab: "", modes: {}, hideDone: false, open: {} };
+const DEFAULTS: Prefs = { theme: "auto", shopping: false, listId: "", tab: "", modes: {}, done: "inline", open: {} };
 
 function load(): Prefs {
   try {
-    return { ...DEFAULTS, ...JSON.parse(localStorage.getItem(KEY) ?? "{}") };
+    const { hideDone, ...stored } = JSON.parse(localStorage.getItem(KEY) ?? "{}");
+    // Früher nur ein/aus – ausgeblendet bleibt ausgeblendet.
+    return { ...DEFAULTS, ...(hideDone ? { done: "aus" } : {}), ...stored };
   } catch {
     return { ...DEFAULTS };
   }

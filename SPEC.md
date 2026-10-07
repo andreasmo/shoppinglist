@@ -79,7 +79,7 @@ Heute (Listonic): eine Liste je Geschäft (Aldi, dm, Kaufland). Aldi ist der Sta
 - **Zweistufig:**
   1. Warengruppen in Laufweg-Reihenfolge je Geschäft.
   2. Innerhalb einer Warengruppe manuell per Drag & Drop.
-- **Abgehakt bleibt an Ort und Stelle** (grau, durchgestrichen). „Erledigte ausblenden“ blendet nur aus und sortiert nichts um.
+- **Abgehakt bleibt an Ort und Stelle** (grau, durchgestrichen). Der Schalter „Erledigte“ schaltet reihum: **an ihrem Platz** → **unten gesammelt** (eigener Abschnitt „Erledigt“ am Ende, in Laufweg-Reihenfolge) → **ausgeblendet**. Die Positionen selbst ändern sich dabei nie.
 - **„Einkauf abschließen“** (⋮-Menü) räumt die abgehakten Einträge ab, die Artikel bleiben im Katalog.
 - **Rückgängig:** Jedes Abhaken zeigt kurz einen Hinweis mit „Rückgängig“ – wichtig, wenn Erledigte ausgeblendet sind und der Eintrag sofort verschwindet.
 - Technik: Fractional Indexing (String-Positionen). Umsortieren ändert nur eine einzige Zeile.
@@ -112,7 +112,7 @@ Heute (Listonic): eine Liste je Geschäft (Aldi, dm, Kaufland). Aldi ist der Sta
 │ Lebensmittel ▾                 ☁ ⋮   │  ← Listenwechsel · Sync-Status
 │  Aldi 9   Kaufland 2   dm 3   Alle   │  ← wischbare Tabs
 │           ━━━━━━━━━━                 │
-│ [Alles hier ●|Nur für hier] [◉ Erl.] │  ← Ansichtsmodus · Erledigte ein/aus
+│ [Alles hier ●|Nur für hier] [◉ Erl.] │  ← Ansichtsmodus · Erledigte: Platz/unten/aus
 ├──────────────────────────────────────┤
 │ OBST & GEMÜSE                        │
 │ ○ Bananen                            │
@@ -141,7 +141,7 @@ Heute (Listonic): eine Liste je Geschäft (Aldi, dm, Kaufland). Aldi ist der Sta
 
 ### 4.4 Einkaufsmodus, Sortieren & Einstellungen
 - **Einkaufsmodus** (⋮-Menü): Display bleibt an (Wake Lock), Zeilen 54 statt 44 px, Abgleich alle 30 statt 300 s. Eine Leiste zeigt ihn an und beendet ihn.
-- **Umsortieren** direkt in der Geschäfts-Ansicht: Artikel innerhalb einer Warengruppe am Griff (rechts) ziehen. Ausgeblendete Erledigte behalten dabei ihren Platz.
+- **Umsortieren** direkt in der Geschäfts-Ansicht: Artikel innerhalb einer Warengruppe am Griff (rechts) ziehen. Der Griff erscheint nur, wenn Erledigte an ihrem Platz stehen. Sonst fehlen Nachbarn, und man würde blind sortieren.
   - Die Position gilt pro Geschäft.
   - Artikel, die gerade nicht auf der Liste stehen, behalten ihren Platz.
 - **Einstellungen** (⋮ → Einstellungen):

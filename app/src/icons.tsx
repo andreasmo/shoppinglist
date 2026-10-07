@@ -30,6 +30,10 @@ export const Eye = ({ size }: P) => (
 export const EyeOff = ({ size }: P) => (
   <Icon size={size}><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" /><path d="M3 3l18 18" /></Icon>
 );
+/** Erledigte unten: Haken über einer Linie, Pfeil nach unten. */
+export const DoneBelow = ({ size }: P) => (
+  <Icon size={size}><path d="M4 7.5l2.5 2.5L11 5.5M17 4v12M13.5 12.5L17 16l3.5-3.5M4 20h16" /></Icon>
+);
 export const CloudOk = ({ size }: P) => <Icon size={size}><path d={CLOUD} /><path d="M9.5 13.5l2 2 3.5-3.5" /></Icon>;
 export const CloudOff = ({ size }: P) => <Icon size={size}><path d={CLOUD} /><path d="M4 4l16 16" /></Icon>;
 export const CloudSync = ({ size }: P) => <Icon size={size}><path d={CLOUD} /><path d="M12 10.5v5M9.8 13.3L12 15.5l2.2-2.2" /></Icon>;

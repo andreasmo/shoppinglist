@@ -1,6 +1,6 @@
-import { badgeCount, defaultList, isExclusive, items, primaryGroups, shownAt, sortedLists, sortedStores, storeView, type Item, type Mode } from "@shared/view.ts";
+import { badgeCount, defaultList, isExclusive, items, primaryGroups, shownAt, sortedLists, sortedStores, storeView, type DoneMode, type Item, type Mode } from "@shared/view.ts";
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
-import { ArrowRight, Cart, CheckCircle, ChevronDown, ChevronRight, CloudOff, CloudOk, CloudSync, Download, Eye, EyeOff, More, Plus, Refresh, Route, Settings as SettingsIcon, UserPlus } from "../icons.tsx";
+import { ArrowRight, Cart, CheckCircle, ChevronDown, ChevronRight, CloudOff, CloudOk, CloudSync, DoneBelow, Download, Eye, EyeOff, More, Plus, Refresh, Route, Settings as SettingsIcon, UserPlus } from "../icons.tsx";
 import { finishTrip, reorderProducts, toggleChecked } from "../lib/actions.ts";
 import { ago, plural } from "../lib/format.ts";
 import { setPrefs, usePrefs } from "../lib/prefs.ts";
@@ -12,6 +12,10 @@ import { ItemRow } from "./ItemRow.tsx";
 import { Settings, type SettingsPage } from "./Settings.tsx";
 import { AddSheet, EditSheet, InviteSheet } from "./Sheets.tsx";
 import { SortableList } from "./Sortable.tsx";
+
+/** Der Knopf „Erledigte“ schaltet reihum: an ihrem Platz → unten gesammelt → ausgeblendet. */
+const DONE_NEXT: Record<DoneMode, DoneMode> = { inline: "unten", unten: "aus", aus: "inline" };
+const DONE_LABEL: Record<DoneMode, string> = { inline: "Erledigte an ihrem Platz", unten: "Erledigte unten gesammelt", aus: "Erledigte ausgeblendet" };
 
 type Sheet = { kind: "add" } | { kind: "edit"; id: string } | { kind: "invite" } | null;
 export interface Toast {
@@ -66,8 +70,10 @@ export function Main() {
   const storeId = tab === "alle" ? null : tab;
   const store_ = storeId ? s.stores.get(storeId) : undefined;
   const mode: Mode = (storeId && prefs.modes[storeId]) || "alles";
-  const view = storeId ? storeView(s, all, { storeId, mode, hideDone: prefs.hideDone }) : null;
-  const plan = storeId ? null : primaryGroups(s, all, list.id, prefs.hideDone);
+  const view = storeId ? storeView(s, all, { storeId, mode, done: prefs.done }) : null;
+  const plan = storeId ? null : primaryGroups(s, all, list.id, prefs.done);
+  // Umsortieren nur, wenn alles an seinem Platz steht – sonst fehlen Nachbarn und Lücken wären unsichtbar.
+  const sortable = prefs.done === "inline";
 
   const me = st.session?.memberId;
   const myName = st.session?.memberName;
@@ -105,6 +111,21 @@ export function Main() {
     setMenu(null);
     fn();
   };
+  const onDoneMode = () => {
+    const next = DONE_NEXT[prefs.done];
+    setPrefs({ done: next });
+    showToast({ text: DONE_LABEL[next] });
+  };
+  const doneSection = (done: Item[]) =>
+    done.length > 0 && (
+      <section className="done-section">
+        <h2 className="cat">
+          <span>Erledigt</span>
+          <span>{done.length}</span>
+        </h2>
+        {done.map((it) => row(it))}
+      </section>
+    );
   const onFinish = () => {
     const { count, undo } = finishTrip();
     showToast({ text: `${plural(count, "Eintrag", "Einträge")} abgeräumt`, undo });
@@ -176,11 +197,11 @@ export function Main() {
           )}
           <button
             className="hide-btn"
-            aria-pressed={prefs.hideDone}
-            aria-label={prefs.hideDone ? "Erledigte sind ausgeblendet – tippen zum Anzeigen" : "Erledigte ausblenden"}
-            onClick={() => setPrefs((p) => ({ hideDone: !p.hideDone }))}
+            data-done={prefs.done}
+            aria-label={`${DONE_LABEL[prefs.done]} – tippen zum Wechseln`}
+            onClick={onDoneMode}
           >
-            {prefs.hideDone ? <EyeOff size={18} /> : <Eye size={18} />}
+            {prefs.done === "inline" ? <Eye size={18} /> : prefs.done === "unten" ? <DoneBelow size={18} /> : <EyeOff size={18} />}
             Erledigte
             {doneShown > 0 && <span className="count">{doneShown}</span>}
           </button>
@@ -210,18 +231,22 @@ export function Main() {
                   <span>{g.category.name}</span>
                   <span>{g.open || "erledigt"}</span>
                 </h2>
-                {/* Ausgeblendete Erledigte behalten beim Umsortieren ihren Platz. */}
-                <SortableList
-                  items={g.items}
-                  getId={(it) => it.product.id}
-                  getLabel={(it) => it.product.name}
-                  onReorder={(ids) => reorderProducts(storeId, g.category.id, ids)}
-                >
-                  {(it, handle) => row(it, handle)}
-                </SortableList>
+                {sortable ? (
+                  <SortableList
+                    items={g.items}
+                    getId={(it) => it.product.id}
+                    getLabel={(it) => it.product.name}
+                    onReorder={(ids) => reorderProducts(storeId, g.category.id, ids)}
+                  >
+                    {(it, handle) => row(it, handle)}
+                  </SortableList>
+                ) : (
+                  g.items.map((it) => row(it))
+                )}
               </section>
             ))}
-            {view.groups.length === 0 && (
+            {doneSection(view.done)}
+            {view.groups.length === 0 && view.done.length === 0 && (
               <p className="empty">
                 {all.length > 0
                   ? mode === "nur"
@@ -261,7 +286,7 @@ export function Main() {
         )}
         {plan && (
           <>
-            {plan.map((g) => (
+            {plan.groups.map((g) => (
               <section key={g.store.id}>
                 <div className="store-head" style={{ "--c": g.store.color } as CSSProperties}>
                   <span className="dot" />
@@ -272,10 +297,11 @@ export function Main() {
                     Zum Laden <ArrowRight size={15} />
                   </button>
                 </div>
-                {g.items.map(row)}
+                {g.items.map((it) => row(it))}
               </section>
             ))}
-            {plan.length === 0 && <p className="empty">Die Liste ist leer – unten etwas hinzufügen.</p>}
+            {doneSection(plan.done)}
+            {plan.groups.length === 0 && plan.done.length === 0 && <p className="empty">Die Liste ist leer – unten etwas hinzufügen.</p>}
           </>
         )}
       </main>

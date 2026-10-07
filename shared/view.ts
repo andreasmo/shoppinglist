@@ -3,6 +3,8 @@
 import type { Category, Entry, List, Product, Snapshot, Store } from "./model.ts";
 
 export type Mode = "alles" | "nur";
+/** Erledigte: an ihrem Platz („inline“), gesammelt am Ende („unten“) oder ausgeblendet („aus“). */
+export type DoneMode = "inline" | "unten" | "aus";
 
 export interface Item {
   entry: Entry;
@@ -20,6 +22,8 @@ export interface CategoryGroup {
 
 export interface StoreView {
   groups: CategoryGroup[];
+  /** Erledigte im Modus „unten“, in Laufweg-Reihenfolge; sonst leer. */
+  done: Item[];
   notHere: Item[];
 }
 
@@ -27,6 +31,12 @@ export interface PrimaryGroup {
   store: Store;
   items: Item[];
   open: number;
+}
+
+export interface PlanView {
+  groups: PrimaryGroup[];
+  /** Erledigte im Modus „unten“, in der Reihenfolge der Gruppen; sonst leer. */
+  done: Item[];
 }
 
 const FALLBACK_CATEGORY: Category = { id: "sonst", name: "Sonstiges", sort: 999 };
@@ -149,36 +159,41 @@ function groupByCategory(s: Snapshot, sorted: Item[]): CategoryGroup[] {
 export interface StoreViewOptions {
   storeId: string;
   mode: Mode;
-  hideDone: boolean;
+  done: DoneMode;
 }
 
 /** Ansicht eines Geschäfts: alle Listen zusammen in einem Laufweg – im Laden spielt die Liste keine Rolle. */
 export function storeView(s: Snapshot, all: Item[], o: StoreViewOptions): StoreView {
-  const visible = all.filter((it) => shownAt(it, o.storeId, o.mode) && !(o.hideDone && it.entry.checked));
-  const groups = groupByCategory(s, sortForStore(s, visible, o.storeId));
+  const sorted = sortForStore(s, all.filter((it) => shownAt(it, o.storeId, o.mode)), o.storeId);
+  const inline = o.done === "inline";
+  const groups = groupByCategory(s, inline ? sorted : sorted.filter((it) => !it.entry.checked));
+  const done = o.done === "unten" ? sorted.filter((it) => it.entry.checked) : [];
 
   const notHere = all
     .filter((it) => !it.entry.checked && !isAvailableAt(it, o.storeId))
     .sort((a, b) => a.product.name.localeCompare(b.product.name, "de"));
 
-  return { groups, notHere };
+  return { groups, done, notHere };
 }
 
 /** Planungsansicht „Alle“: Einträge einer Liste, gruppiert nach dem Geschäft, in dem sie gekauft werden. */
-export function primaryGroups(s: Snapshot, all: Item[], listId: string, hideDone: boolean): PrimaryGroup[] {
+export function primaryGroups(s: Snapshot, all: Item[], listId: string, doneMode: DoneMode): PlanView {
   const list = s.lists.get(listId);
-  if (!list) return [];
-  const mine = all.filter((it) => it.list.id === listId && !(hideDone && it.entry.checked));
+  if (!list) return { groups: [], done: [] };
+  const mine = all.filter((it) => it.list.id === listId);
   const storeIds = [...list.storeIds];
   for (const it of mine) if (it.primary && !storeIds.includes(it.primary)) storeIds.push(it.primary);
-  const out: PrimaryGroup[] = [];
+  const groups: PrimaryGroup[] = [];
+  const done: Item[] = [];
   for (const id of storeIds) {
     const store = s.stores.get(id);
     if (!store) continue;
-    const its = sortForStore(s, mine.filter((it) => it.primary === id), id);
-    if (its.length) out.push({ store, items: its, open: its.filter((i) => !i.entry.checked).length });
+    const sorted = sortForStore(s, mine.filter((it) => it.primary === id), id);
+    const its = doneMode === "inline" ? sorted : sorted.filter((i) => !i.entry.checked);
+    if (doneMode === "unten") done.push(...sorted.filter((i) => i.entry.checked));
+    if (its.length) groups.push({ store, items: its, open: its.filter((i) => !i.entry.checked).length });
   }
-  return out;
+  return { groups, done };
 }
 
 /** Tab-Badge: offene Einträge (aller Listen), für die man eigens in dieses Geschäft muss. */
