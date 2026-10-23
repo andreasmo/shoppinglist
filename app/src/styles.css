@@ -86,6 +86,10 @@ input, textarea { font: inherit; color: inherit; }
 .sync-chip[data-state="offline"] { color: var(--warn-fg); background: var(--warn-bg); }
 .sync-chip[data-state="error"] { color: var(--err-fg); background: var(--err-bg); }
 .icon-btn { position: relative; width: 44px; height: 44px; flex: none; display: flex; align-items: center; justify-content: center; border-radius: 22px; }
+.icon-btn.primary { background: var(--ink); color: var(--on-ink); }
+.icon-btn.soft { background: var(--soft); }
+.icon-btn.danger-soft { color: var(--err-fg); background: var(--err-bg); }
+.icon-btn.danger { color: var(--err-bg); background: var(--err-fg); }
 .icon-btn .dot-badge { position: absolute; top: 9px; right: 9px; width: 8px; height: 8px; border-radius: 4px; background: var(--accent); }
 .tabs { display: flex; gap: 2px; overflow-x: auto; padding: 0 8px; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }

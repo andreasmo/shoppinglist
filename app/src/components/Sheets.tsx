@@ -2,7 +2,7 @@ import { normalizeName, type Product } from "@shared/model.ts";
 import { parseInput } from "@shared/parse.ts";
 import { sortedCategories, sortedLists, sortedStores } from "@shared/view.ts";
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import { Check, Close, Copy, Plus, PlusCircle, Share } from "../icons.tsx";
+import { Check, Close, Copy, Plus, PlusCircle, Share, Trash } from "../icons.tsx";
 import { api, OfflineError } from "../lib/api.ts";
 import { addToList, removeEntryWithUndo, updateEntry, updateProduct, type NewProduct } from "../lib/actions.ts";
 import { store, useStore } from "../lib/store.ts";
@@ -236,6 +236,7 @@ export function EditSheet({ entryId, onClose, onToast }: { entryId: string; onCl
   const product = s.products.get(entryId);
   const [qty, setQty] = useState(entry?.qty ?? "");
   const [note, setNote] = useState(entry?.note ?? "");
+  const [confirmRemove, setConfirmRemove] = useState(false);
   const [draft, setDraft] = useState<NewProduct>({
     name: product?.name ?? "",
     listId: product?.listId ?? "",
@@ -271,9 +272,26 @@ export function EditSheet({ entryId, onClose, onToast }: { entryId: string; onCl
     <Sheet label={`${product.name} bearbeiten`} onClose={onClose}>
       <div className="sheet-head">
         <h3>{product.name}</h3>
-        <button className="icon-btn" aria-label="Schließen ohne Speichern" onClick={onClose}>
-          <Close />
-        </button>
+        {/* Löschen braucht zwei Klicks an verschiedenen Stellen: Papierkorb, dann der Haken daneben. */}
+        {confirmRemove ? (
+          <>
+            <button className="icon-btn soft" aria-label="Nicht löschen" onClick={() => setConfirmRemove(false)}>
+              <Close />
+            </button>
+            <button className="icon-btn danger" aria-label="Wirklich von der Liste nehmen" onClick={remove}>
+              <Check size={20} />
+            </button>
+          </>
+        ) : (
+          <>
+            <button className="icon-btn danger-soft" aria-label="Von der Liste" onClick={() => setConfirmRemove(true)}>
+              <Trash />
+            </button>
+            <button className="icon-btn primary" aria-label="Fertig" onClick={() => save()}>
+              <Check size={20} />
+            </button>
+          </>
+        )}
       </div>
       <form className="group" onSubmit={save}>
         <span className="label" id="qty-label">Menge</span>
@@ -307,10 +325,6 @@ export function EditSheet({ entryId, onClose, onToast }: { entryId: string; onCl
         <button type="submit" hidden />
       </form>
       <ProductFields draft={draft} onChange={setDraft} />
-      <div className="btn-row">
-        <button className="danger-btn" onClick={remove}>Von der Liste</button>
-        <button className="primary-btn" onClick={() => save()}>Fertig</button>
-      </div>
     </Sheet>
   );
 }
