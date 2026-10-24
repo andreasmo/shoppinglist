@@ -90,6 +90,8 @@ input, textarea { font: inherit; color: inherit; }
 .icon-btn.soft { background: var(--soft); }
 .icon-btn.danger-soft { color: var(--err-fg); background: var(--err-bg); }
 .icon-btn.danger { color: var(--err-bg); background: var(--err-fg); }
+.icon-btn.sale-toggle { color: var(--muted); background: var(--soft); }
+.icon-btn.sale-toggle[aria-pressed="true"] { color: var(--warn-bg); background: var(--warn-fg); }
 .icon-btn .dot-badge { position: absolute; top: 9px; right: 9px; width: 8px; height: 8px; border-radius: 4px; background: var(--accent); }
 .tabs { display: flex; gap: 2px; overflow-x: auto; padding: 0 8px; scrollbar-width: none; }
 .tabs::-webkit-scrollbar { display: none; }
@@ -131,6 +133,7 @@ button.row:active { background: var(--row-active); }
 .row-note { flex: 1 1 0; min-width: 0; font-size: 14px; color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .row-by { flex: none; font-size: 13px; color: var(--muted-2); }
 .row-qty { flex: none; font-size: 15px; color: var(--muted); }
+.row-sale { flex: none; display: flex; color: var(--warn-fg); }
 .done-section { margin-top: 14px; border-top: 1px solid var(--line); }
 .box { margin: 10px 12px 0; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
 .box + .box { margin-top: 8px; }

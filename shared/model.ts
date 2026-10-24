@@ -95,6 +95,8 @@ export interface Entry {
   qty: string;
   note: string;
   onlyStore: string | null;
+  /** „Nicht dringend – kaufen, wenn's im Angebot ist.“ */
+  lowPrio: boolean;
   checked: boolean;
   checkedBy: string | null;
   checkedAt: number;
@@ -181,6 +183,7 @@ export function buildSnapshot(records: Iterable<RawRecord>): Snapshot {
           qty: str(d.qty),
           note: str(d.note),
           onlyStore: strOrNull(d.onlyStore),
+          lowPrio: d.lowPrio === true,
           checked: d.checked === true,
           checkedBy: strOrNull(d.checkedBy),
           checkedAt: num(d.checkedAt),

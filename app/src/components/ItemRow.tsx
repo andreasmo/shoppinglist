@@ -1,6 +1,6 @@
 import type { Item } from "@shared/view.ts";
 import type { CSSProperties, ReactNode } from "react";
-import { Check } from "../icons.tsx";
+import { Check, Sale } from "../icons.tsx";
 import { useLongPress } from "../lib/useLongPress.ts";
 
 interface Props {
@@ -30,6 +30,12 @@ export function ItemRow({ item, dotColor, checkedBy, onToggle, onEdit, handle }:
       {dotColor && (
         <span className="dot" style={{ "--c": dotColor } as CSSProperties}>
           <span className="sr">gibt's nur hier</span>
+        </span>
+      )}
+      {entry.lowPrio && (
+        <span className="row-sale" title="Nicht dringend – im Angebot kaufen">
+          <Sale size={18} />
+          <span className="sr">nicht dringend, im Angebot kaufen</span>
         </span>
       )}
       {entry.qty && <span className="row-qty">{entry.qty}</span>}

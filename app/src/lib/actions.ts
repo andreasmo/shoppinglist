@@ -59,7 +59,7 @@ function addChanges(product: Product | NewProduct, qty: string): { changes: Chan
   changes.push({
     tbl: "entry",
     rid: id,
-    fields: { _deleted: false, qty, note: "", onlyStore: null, checked: false, checkedBy: null, checkedAt: 0, addedBy: me(), addedAt: now },
+    fields: { _deleted: false, qty, note: "", onlyStore: null, lowPrio: false, checked: false, checkedBy: null, checkedAt: 0, addedBy: me(), addedAt: now },
   });
   return { changes, result: "added" };
 }
@@ -83,7 +83,7 @@ export function toggleChecked(entry: Entry): () => void {
   return restorer([entry]);
 }
 
-export function updateEntry(id: string, fields: Partial<Pick<Entry, "qty" | "note" | "onlyStore">>) {
+export function updateEntry(id: string, fields: Partial<Pick<Entry, "qty" | "note" | "onlyStore" | "lowPrio">>) {
   if (Object.keys(fields).length) store.mutate("entry", id, fields);
 }
 
@@ -106,6 +106,7 @@ function restorer(entries: Entry[]): () => void {
         qty: e.qty,
         note: e.note,
         onlyStore: e.onlyStore,
+        lowPrio: e.lowPrio,
         checked: e.checked,
         checkedBy: e.checkedBy,
         checkedAt: e.checkedAt,

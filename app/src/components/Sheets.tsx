@@ -2,7 +2,7 @@ import { normalizeName, type Product } from "@shared/model.ts";
 import { parseInput } from "@shared/parse.ts";
 import { sortedCategories, sortedLists, sortedStores } from "@shared/view.ts";
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
-import { Check, Close, Copy, Plus, PlusCircle, Share, Trash } from "../icons.tsx";
+import { Check, Close, Copy, Plus, PlusCircle, Sale, Share, Trash } from "../icons.tsx";
 import { api, OfflineError } from "../lib/api.ts";
 import { addToList, removeEntryWithUndo, updateEntry, updateProduct, type NewProduct } from "../lib/actions.ts";
 import { store, useStore } from "../lib/store.ts";
@@ -284,6 +284,16 @@ export function EditSheet({ entryId, onClose, onToast }: { entryId: string; onCl
           </>
         ) : (
           <>
+            {/* Niedrige Priorität: nicht dringend, mitnehmen, wenn's im Angebot ist. Wirkt sofort. */}
+            <button
+              className="icon-btn sale-toggle"
+              aria-pressed={entry.lowPrio}
+              aria-label="Nicht dringend – im Angebot kaufen"
+              title="Nicht dringend – im Angebot kaufen"
+              onClick={() => updateEntry(entry.id, { lowPrio: !entry.lowPrio })}
+            >
+              <Sale />
+            </button>
             <button className="icon-btn danger-soft" aria-label="Von der Liste" onClick={() => setConfirmRemove(true)}>
               <Trash />
             </button>

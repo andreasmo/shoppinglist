@@ -65,4 +65,11 @@ export const Route = ({ size }: P) => (
 export const Trash = ({ size }: P) => <Icon size={size}><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" /></Icon>;
 export const LogOut = ({ size }: P) => <Icon size={size}><path d="M15 4h4v16h-4M10 17l5-5-5-5M15 12H4" /></Icon>;
 export const Import = ({ size }: P) => <Icon size={size}><path d="M12 3v12M7 10l5 5 5-5M4 15v5h16v-5" /></Icon>;
+/** Angebot: Rosette mit Prozentzeichen. */
+export const Sale = ({ size }: P) => (
+  <Icon size={size}>
+    <path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76z" />
+    <path d="M15 9l-6 6M9 9h.01M15 15h.01" />
+  </Icon>
+);
 export const Copy = ({ size }: P) => <Icon size={size}><rect x="8" y="8" width="12" height="12" rx="2" /><path d="M16 8V5a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h3" /></Icon>;
