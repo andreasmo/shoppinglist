@@ -88,7 +88,7 @@ export function AddSheet({ listId, onClose, onToast }: { listId: string; onClose
   const st = useStore();
   const s = st.snapshot;
   const [q, setQ] = useState("");
-  const [draft, setDraft] = useState<(NewProduct & { qty: string }) | null>(null);
+  const [draft, setDraft] = useState<(NewProduct & { qty: string; lowPrio: boolean }) | null>(null);
   const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -132,16 +132,21 @@ export function AddSheet({ listId, onClose, onToast }: { listId: string; onClose
     setDraft(null);
     input.current?.focus(); // gleich den nächsten Artikel eintippen
   };
-  const add = (p: Product | NewProduct, qty: string) => {
+  const add = (p: Product | NewProduct, qty: string, lowPrio = false) => {
     const name = p.name;
-    const res = addToList(p, qty);
-    onToast({ text: res === "added" ? `${name} hinzugefügt${qty ? ` (${qty})` : ""}` : qty ? `${name}: Menge ${qty}` : `${name} steht schon drauf` });
+    const res = addToList(p, qty, lowPrio);
+    const prio = lowPrio ? "nicht dringend" : "";
+    const added = [qty, prio].filter(Boolean).join(", ");
+    const updated = [qty && `Menge ${qty}`, prio].filter(Boolean).join(", ");
+    onToast({
+      text: res === "added" ? `${name} hinzugefügt${added ? ` (${added})` : ""}` : updated ? `${name}: ${updated}` : `${name} steht schon drauf`,
+    });
     reset();
   };
-  const startDraft = () => {
+  const startDraft = (lowPrio = false) => {
     if (!parsed.name) return;
     const list = s.lists.get(listId);
-    setDraft({ name: parsed.name, qty: parsed.qty, listId, categoryId: "sonst", avail: list?.storeIds.slice(0, 1) ?? [] });
+    setDraft({ name: parsed.name, qty: parsed.qty, lowPrio, listId, categoryId: "sonst", avail: list?.storeIds.slice(0, 1) ?? [] });
   };
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -156,12 +161,21 @@ export function AddSheet({ listId, onClose, onToast }: { listId: string; onClose
         <div className="sheet-head">
           <h3>{draft.name}</h3>
           {draft.qty && <span className="sub">{draft.qty}</span>}
+          <button
+            className="icon-btn sale-toggle"
+            aria-pressed={draft.lowPrio}
+            aria-label="Nicht dringend – im Angebot kaufen"
+            title="Nicht dringend – im Angebot kaufen"
+            onClick={() => setDraft({ ...draft, lowPrio: !draft.lowPrio })}
+          >
+            <Sale />
+          </button>
           <button className="icon-btn" aria-label="Zurück" onClick={() => setDraft(null)}>
             <Close />
           </button>
         </div>
         <ProductFields draft={draft} onChange={(d) => setDraft({ ...draft, ...d })} />
-        <button className="primary-btn" onClick={() => add(draft, draft.qty)}>
+        <button className="primary-btn" onClick={() => add(draft, draft.qty, draft.lowPrio)}>
           <Plus /> Hinzufügen
         </button>
       </Sheet>
@@ -188,23 +202,29 @@ export function AddSheet({ listId, onClose, onToast }: { listId: string; onClose
       {norm ? (
         <div className="sugg-list">
           {matches.map((p) => (
-            <button key={p.id} className="sugg" onClick={() => add(p, parsed.qty)}>
-              <Plus />
-              <span className="sugg-text">
-                <strong>{p.name}</strong>
-                <small>{meta(p)}</small>
-              </span>
-              {isOpen(p) && <span className="pill">steht drauf</span>}
-            </button>
+            <div key={p.id} className="sugg-row">
+              <button className="sugg" onClick={() => add(p, parsed.qty)}>
+                <Plus />
+                <span className="sugg-text">
+                  <strong>{p.name}</strong>
+                  <small>{meta(p)}</small>
+                </span>
+                {isOpen(p) && <span className="pill">steht drauf</span>}
+              </button>
+              <SaleAddButton onClick={() => add(p, parsed.qty, true)} />
+            </div>
           ))}
           {!exact && (
-            <button className="sugg" onClick={startDraft}>
-              <PlusCircle />
-              <span className="sugg-text">
-                <strong>„{parsed.name}“ neu anlegen</strong>
-                {parsed.qty && <small>Menge {parsed.qty}</small>}
-              </span>
-            </button>
+            <div className="sugg-row">
+              <button className="sugg" onClick={() => startDraft()}>
+                <PlusCircle />
+                <span className="sugg-text">
+                  <strong>„{parsed.name}“ neu anlegen</strong>
+                  {parsed.qty && <small>Menge {parsed.qty}</small>}
+                </span>
+              </button>
+              <SaleAddButton onClick={() => startDraft(true)} />
+            </div>
           )}
         </div>
       ) : (
@@ -222,6 +242,15 @@ export function AddSheet({ listId, onClose, onToast }: { listId: string; onClose
         )
       )}
     </Sheet>
+  );
+}
+
+/** Direkt als „nicht dringend – im Angebot kaufen“ hinzufügen. */
+function SaleAddButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button className="icon-btn sale-add" aria-label="Als „nicht dringend“ hinzufügen" title="Nicht dringend – im Angebot kaufen" onClick={onClick}>
+      <Sale />
+    </button>
   );
 }
 

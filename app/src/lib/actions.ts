@@ -36,7 +36,7 @@ export interface NewProduct {
 
 export type AddResult = "added" | "updated";
 
-function addChanges(product: Product | NewProduct, qty: string): { changes: Change[]; result: AddResult } {
+function addChanges(product: Product | NewProduct, qty: string, lowPrio: boolean): { changes: Change[]; result: AddResult } {
   const now = Date.now();
   const changes: Change[] = [];
   let id: string;
@@ -53,20 +53,20 @@ function addChanges(product: Product | NewProduct, qty: string): { changes: Chan
   }
   const existing = store.snapshot.entries.get(id);
   if (existing && !existing.checked) {
-    if (qty) changes.push({ tbl: "entry", rid: id, fields: { qty } });
+    if (qty || lowPrio) changes.push({ tbl: "entry", rid: id, fields: { ...(qty ? { qty } : {}), ...(lowPrio ? { lowPrio } : {}) } });
     return { changes, result: "updated" };
   }
   changes.push({
     tbl: "entry",
     rid: id,
-    fields: { _deleted: false, qty, note: "", onlyStore: null, lowPrio: false, checked: false, checkedBy: null, checkedAt: 0, addedBy: me(), addedAt: now },
+    fields: { _deleted: false, qty, note: "", onlyStore: null, lowPrio, checked: false, checkedBy: null, checkedAt: 0, addedBy: me(), addedAt: now },
   });
   return { changes, result: "added" };
 }
 
-/** Setzt ein (ggf. neues) Produkt auf die Liste. Steht es schon offen drauf, wird nur die Menge übernommen. */
-export function addToList(product: Product | NewProduct, qty: string): AddResult {
-  const { changes, result } = addChanges(product, qty);
+/** Setzt ein (ggf. neues) Produkt auf die Liste. Steht es schon offen drauf, werden nur Menge bzw. Low Prio übernommen. */
+export function addToList(product: Product | NewProduct, qty: string, lowPrio = false): AddResult {
+  const { changes, result } = addChanges(product, qty, lowPrio);
   store.mutateMany(changes);
   return result;
 }
@@ -268,7 +268,7 @@ export function importText(text: string, listId: string): { added: number; updat
     if (!item || seen.has(normalizeName(item.name))) continue;
     seen.add(normalizeName(item.name));
     const product = findProductByName(item.name) ?? { name: item.name, listId, categoryId: "sonst", avail };
-    const res = addChanges(product, item.qty);
+    const res = addChanges(product, item.qty, false);
     changes.push(...res.changes);
     if (res.result === "added") added++;
     else updated++;

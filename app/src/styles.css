@@ -222,6 +222,9 @@ button.row:active { background: var(--row-active); }
 .sugg-text strong { font-size: 16px; }
 .sugg-text small { font-size: 13px; color: var(--muted-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .sugg .pill { flex: none; }
+.sugg-row { display: flex; align-items: center; gap: 4px; }
+.sugg-row > .sugg { flex: 1; min-width: 0; }
+.icon-btn.sale-add { flex: none; color: var(--warn-fg); }
 .btn-row { display: flex; gap: 8px; }
 .btn-row > * { flex: 1; }
 .primary-btn { min-height: 52px; border-radius: 14px; background: var(--ink); color: var(--on-ink); font-size: 16px; font-weight: 700; text-align: center; display: flex; align-items: center; justify-content: center; gap: 8px; }
